@@ -65,7 +65,10 @@ def estimate_sample_size(
 
     effect_size = proportion_effectsize(expected_rate, baseline_rate)
     if effect_size == 0:
-        return int(ceil(1 / alpha))
+        raise ValueError(
+            "baseline_rate and expected_rate are equal — there is no detectable effect to power against. "
+            "Provide a non-zero expected lift."
+        )
     solver = NormalIndPower()
     nobs = solver.solve_power(effect_size=effect_size, power=target_power, alpha=alpha, ratio=ratio)
     return int(ceil(nobs))

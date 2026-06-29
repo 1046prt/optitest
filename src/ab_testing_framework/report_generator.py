@@ -9,7 +9,9 @@ from pathlib import Path
 from .analysis import AbTestResult
 
 
-def _format_pct(value: float) -> str:
+def _format_pct(value: float | None) -> str:
+    if value is None:
+        return "N/A"
     return f"{value:.2%}"
 
 

@@ -21,10 +21,16 @@ A statistically sound A/B testing framework for comparing a control and a treatm
 
 ## Run It
 
-Install dependencies:
+Install runtime dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
+
+Or install the package in editable mode (recommended for development — also removes the need for any `sys.path` workarounds):
+
+```bash
+pip install -e ".[dev]"
 ```
 
 Run the dashboard:
@@ -50,5 +56,6 @@ The sample dataset uses:
 
 ## Notes
 
-- The framework uses a one-sided two-proportion z-test to evaluate whether treatment improves conversion.
+- The framework uses a two-sided two-proportion z-test to evaluate whether treatment and control differ in conversion rate.
+- A positive confidence interval lower bound is required (alongside p < α) to trigger a "Deploy" recommendation.
 - The dashboard accepts manual inputs or a CSV upload.

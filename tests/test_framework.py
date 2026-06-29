@@ -18,7 +18,7 @@ def test_validate_input_returns_clean_dataclass():
 def test_run_ab_test_detects_positive_lift():
     result = run_ab_test(10000, 450, 10000, 520)
 
-    assert result.decision == "Reject H0"
+    assert result.decision == "Reject H₀"
     assert result.z_test.p_value < 0.05
     assert result.metrics.conversion_rate_b > result.metrics.conversion_rate_a
     assert result.confidence_interval.lower_bound > 0
@@ -28,7 +28,7 @@ def test_run_ab_test_detects_positive_lift():
 def test_run_ab_test_handles_no_lift():
     result = run_ab_test(5000, 250, 5000, 250)
 
-    assert result.decision == "Fail to reject H0"
+    assert result.decision == "Fail to reject H₀"
     assert result.z_test.p_value == pytest.approx(0.5, abs=0.5)
     assert result.metrics.absolute_difference == 0
     assert result.is_statistically_significant is False

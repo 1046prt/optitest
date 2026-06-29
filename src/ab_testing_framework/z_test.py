@@ -19,7 +19,7 @@ class ZTestResult:
 
 def perform_z_test(
     experiment: ExperimentInput,
-    alternative: str = "larger",
+    alternative: str = "two-sided",
 ) -> ZTestResult:
     successes_a = experiment.conversions_a
     successes_b = experiment.conversions_b

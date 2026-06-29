@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+from plotly.subplots import make_subplots  # noqa: F401  (reserved for future multi-panel charts)
 from scipy import stats
 
 from .analysis import AbTestResult
