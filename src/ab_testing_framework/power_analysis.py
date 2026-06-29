@@ -96,6 +96,18 @@ def analyze_power(
     if effect_size_h == 0:
         power = float(alpha)
         required_sample_size_per_group = experiment.visitors_a
+    elif control_rate <= 0 or control_rate >= 1 or treatment_rate <= 0 or treatment_rate >= 1:
+        # Cannot compute sample size when rates are at the boundary;
+        # power is still valid from the effect size and observed n.
+        power = float(
+            solver.power(
+                effect_size=effect_size_h,
+                nobs1=experiment.visitors_a,
+                alpha=alpha,
+                ratio=experiment.visitors_b / experiment.visitors_a,
+            )
+        )
+        required_sample_size_per_group = experiment.visitors_a
     else:
         power = float(
             solver.power(

@@ -1,4 +1,4 @@
-"""Streamlit dashboard for the A/B testing framework."""
+"""Streamlit dashboard for the Split Testing Suite."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from ab_testing_framework.visualization import (               # noqa: E402
     histogram, z_score_plot,
 )
 
-APP_TITLE = "A/B Testing Framework"
+APP_TITLE = "Split Testing Suite"
 
 # ── page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -307,8 +307,8 @@ div[data-testid="stExpander"] code {
 
 # ── cached analysis ────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
-def _run(va: int, ca: int, vb: int, cb: int, alpha: float):
-    return run_ab_test(va, ca, vb, cb, alpha=alpha)
+def _run(va: int, ca: int, vb: int, cb: int, alpha: float, alternative: str):
+    return run_ab_test(va, ca, vb, cb, alpha=alpha, alternative=alternative)
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -338,7 +338,7 @@ def _lift_class(val: float) -> str:
 
 # ── sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### A/B Testing Framework")
+    st.markdown("### Split Testing Suite")
     st.markdown("---")
 
     st.markdown("#### Data source")
@@ -361,12 +361,36 @@ with st.sidebar:
         min_value=0.01, max_value=0.20, value=0.05, step=0.01,
         help="Threshold for rejecting H₀. Common values: 0.05 (standard) · 0.01 (strict) · 0.10 (exploratory).",
     )
+    alternative = st.selectbox(
+        "Hypothesis",
+        options=["two-sided", "larger", "smaller"],
+        index=0,
+        help=(
+            "two-sided: test whether B ≠ A (most common).\n"
+            "larger: test whether B > A (directional, more power).\n"
+            "smaller: test whether B < A."
+        ),
+    )
+
+    st.markdown("---")
+    st.markdown("#### Sample CSV format")
+    _sample_csv = (
+        "visitors_a,conversions_a,visitors_b,conversions_b\n"
+        "10000,450,10000,520\n"
+    )
+    st.download_button(
+        label="Download template",
+        data=_sample_csv,
+        file_name="ab_test_template.csv",
+        mime="text/csv",
+        help="Use this as a starting point for your own experiment data.",
+    )
 
     st.markdown("---")
     st.markdown(
         "<p style='font-size:0.75rem;color:#555a72;line-height:1.5;'>"
-        "Two-proportion z-test · two-sided · 95% CI<br>"
-        "Power calculated via normal approximation."
+        "Two-proportion z-test · 95% CI<br>"
+        "Power via statsmodels NormalIndPower."
         "</p>",
         unsafe_allow_html=True,
     )
@@ -410,6 +434,7 @@ try:
         int(visitors_a), int(conversions_a),
         int(visitors_b), int(conversions_b),
         float(alpha),
+        alternative,
     )
 except ValueError as exc:
     st.error(f"Validation error: {exc}")
@@ -607,10 +632,10 @@ with st.expander("Power analysis detail"):
 
 # ── footnote ───────────────────────────────────────────────────────────────────
 st.markdown(
-    "<p class='footnote'>"
-    "Decision rule: reject H₀ when p-value &lt; α and the lift confidence interval "
-    "excludes zero. Test is two-sided. Power calculated via normal approximation "
-    "(statsmodels NormalIndPower)."
-    "</p>",
+    f"<p class='footnote'>"
+    f"Decision rule: reject H₀ when p-value &lt; α and the lift confidence interval "
+    f"excludes zero. Test is <strong>{result.z_test.alternative}</strong>. "
+    f"Power calculated via statsmodels NormalIndPower."
+    f"</p>",
     unsafe_allow_html=True,
 )

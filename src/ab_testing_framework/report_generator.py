@@ -9,38 +9,44 @@ from pathlib import Path
 from .analysis import AbTestResult
 
 
-def _format_pct(value: float | None) -> str:
+def _fmt_pct(value: float | None, decimals: int = 2) -> str:
+    """Format a float as a percentage, handling None gracefully."""
     if value is None:
         return "N/A"
-    return f"{value:.2%}"
+    return f"{value:.{decimals}%}"
 
 
 def generate_summary(result: AbTestResult) -> str:
-    metrics = result.metrics
+    m  = result.metrics
     ci = result.confidence_interval
-    effect = result.effect_size
+    es = result.effect_size
+    pa = result.power_analysis
 
-    return (
-        "A/B Testing Summary\n"
-        f"Control conversion rate: {_format_pct(metrics.conversion_rate_a)}\n"
-        f"Treatment conversion rate: {_format_pct(metrics.conversion_rate_b)}\n"
-        f"Absolute lift: {_format_pct(metrics.absolute_difference)}\n"
-        f"Relative lift: {_format_pct(metrics.relative_improvement)}\n"
-        f"Z-score: {result.z_test.z_score:.3f}\n"
-        f"P-value: {result.z_test.p_value:.4f}\n"
-        f"95% CI for lift: {_format_pct(ci.lower_bound)} to {_format_pct(ci.upper_bound)}\n"
-        f"Cohen's h: {effect.cohens_h:.3f}\n"
-        f"Observed power: {result.power_analysis.power:.1%}\n"
-        f"Required sample size per group: {result.power_analysis.required_sample_size_per_group:,}\n"
-        f"Decision: {result.decision}\n"
-        f"Recommendation: {result.recommendation}"
-    )
+    lines = [
+        "A/B Testing Summary",
+        f"Control conversion rate:        {_fmt_pct(m.conversion_rate_a)}",
+        f"Treatment conversion rate:       {_fmt_pct(m.conversion_rate_b)}",
+        f"Absolute lift:                   {_fmt_pct(m.absolute_difference)}",
+        f"Relative lift:                   {_fmt_pct(m.relative_improvement)}",
+        f"Z-score:                         {result.z_test.z_score:.4f}",
+        f"P-value:                         {result.z_test.p_value:.4f}",
+        f"Test type:                       {result.z_test.alternative}",
+        f"{int(ci.confidence_level * 100)}% CI for lift:               "
+        f"{_fmt_pct(ci.lower_bound, 4)} to {_fmt_pct(ci.upper_bound, 4)}",
+        f"Cohen's h:                       {es.cohens_h:.4f}",
+        f"Observed power:                  {pa.power:.1%}",
+        f"Required sample size per group:  {pa.required_sample_size_per_group:,}",
+        f"Decision:                        {result.decision}",
+        f"Recommendation:                  {result.recommendation}",
+    ]
+    return "\n".join(lines)
 
 
 def generate_markdown_report(result: AbTestResult) -> str:
-    metrics = result.metrics
+    m  = result.metrics
     ci = result.confidence_interval
-    effect = result.effect_size
+    es = result.effect_size
+    pa = result.power_analysis
 
     return f"""# A/B Test Report
 
@@ -48,26 +54,35 @@ def generate_markdown_report(result: AbTestResult) -> str:
 {result.summary}
 
 ## Key Metrics
-- Control conversion rate: {_format_pct(metrics.conversion_rate_a)}
-- Treatment conversion rate: {_format_pct(metrics.conversion_rate_b)}
-- Absolute difference: {_format_pct(metrics.absolute_difference)}
-- Relative improvement: {_format_pct(metrics.relative_improvement)}
-- Z-score: {result.z_test.z_score:.3f}
-- P-value: {result.z_test.p_value:.4f}
-- 95% CI: {_format_pct(ci.lower_bound)} to {_format_pct(ci.upper_bound)}
-- Cohen's h: {effect.cohens_h:.3f}
-- Observed power: {result.power_analysis.power:.1%}
-- Required sample size per group: {result.power_analysis.required_sample_size_per_group:,}
+
+| Metric | Value |
+|--------|-------|
+| Control conversion rate | {_fmt_pct(m.conversion_rate_a)} |
+| Treatment conversion rate | {_fmt_pct(m.conversion_rate_b)} |
+| Absolute lift | {_fmt_pct(m.absolute_difference)} |
+| Relative lift | {_fmt_pct(m.relative_improvement)} |
+| Z-score | {result.z_test.z_score:.4f} |
+| P-value | {result.z_test.p_value:.4f} |
+| Test type | {result.z_test.alternative} |
+| {int(ci.confidence_level * 100)}% CI lower | {_fmt_pct(ci.lower_bound, 4)} |
+| {int(ci.confidence_level * 100)}% CI upper | {_fmt_pct(ci.upper_bound, 4)} |
+| Cohen's h | {es.cohens_h:.4f} |
+| Observed power | {pa.power:.1%} |
+| Required n / group | {pa.required_sample_size_per_group:,} |
 
 ## Decision
-{result.decision}
+**{result.decision}**
 
 ## Recommendation
 {result.recommendation}
 """
 
 
-def save_report(result: AbTestResult, output_dir: str | Path = "reports", stem: str | None = None) -> dict[str, Path]:
+def save_report(
+    result: AbTestResult,
+    output_dir: str | Path = "reports",
+    stem: str | None = None,
+) -> dict[str, Path]:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -77,6 +92,8 @@ def save_report(result: AbTestResult, output_dir: str | Path = "reports", stem: 
     json_path = output_path / f"{file_stem}.json"
 
     markdown_path.write_text(generate_markdown_report(result), encoding="utf-8")
+
+    # relative_improvement may be None; serialise as null in JSON
     json_path.write_text(
         json.dumps(
             {
