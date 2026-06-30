@@ -1,4 +1,4 @@
-"""High-level orchestration for A/B testing."""
+"""Orchestration for A/B testing"""
 
 from __future__ import annotations
 
@@ -26,6 +26,12 @@ class AbTestResult:
 
     @property
     def is_statistically_significant(self) -> bool:
+        """``True`` when p-value < alpha.
+
+        Note: this checks the p-value threshold only.  A ``True`` value does
+        *not* imply a positive effect — use ``confidence_interval.lower_bound > 0``
+        alongside this to confirm direction before deploying.
+        """
         return bool(self.z_test.p_value < self.experiment.alpha)
 
 
@@ -35,14 +41,6 @@ def _build_recommendation(
     ci: ConfidenceInterval,
     experiment: ExperimentInput,
 ) -> str:
-    """
-    Build a plain-English recommendation covering all four decision cases:
-
-    - Significant + CI fully above zero  → deploy
-    - Significant + CI fully below zero  → do not deploy (negative effect)
-    - Significant + CI spans zero        → inconclusive (borderline case)
-    - Not significant                    → hold / collect more data
-    """
     sig = z_test.p_value < experiment.alpha
 
     if sig and ci.lower_bound > 0:
@@ -82,26 +80,6 @@ def run_ab_test(
     alpha: float = 0.05,
     alternative: str = "two-sided",
 ) -> AbTestResult:
-    """
-    Run a complete two-proportion A/B test.
-
-    Parameters
-    ----------
-    visitors_a, conversions_a:
-        Visitor and conversion counts for the control group.
-    visitors_b, conversions_b:
-        Visitor and conversion counts for the treatment group.
-    alpha:
-        Significance level (default 0.05).
-    alternative:
-        Hypothesis direction — ``"two-sided"`` (default), ``"larger"``
-        (treatment > control), or ``"smaller"`` (treatment < control).
-
-    Returns
-    -------
-    AbTestResult
-        Fully populated, frozen result dataclass.
-    """
     if alternative not in {"two-sided", "larger", "smaller"}:
         raise ValueError(
             "alternative must be one of: 'two-sided', 'larger', 'smaller'"

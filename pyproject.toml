@@ -8,6 +8,21 @@ version = "0.1.0"
 description = "A statistically sound A/B testing framework with analysis and dashboard support"
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "OptiTest", email = "contact@optitest.dev"},
+]
+keywords = ["ab-testing", "statistics", "hypothesis-testing", "streamlit", "conversion-rate"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
 dependencies = [
   "numpy>=1.26",
   "pandas>=2.2",

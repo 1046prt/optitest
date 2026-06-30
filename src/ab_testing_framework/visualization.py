@@ -1,4 +1,4 @@
-"""Plotly visualizations for the A/B testing dashboard — dark theme."""
+"""Plotly visualizations for the A/B testing dashboard"""
 
 from __future__ import annotations
 
@@ -215,7 +215,6 @@ def z_score_plot(result: AbTestResult) -> go.Figure:
 
 
 def distribution_plot(result: AbTestResult, points: int = 300) -> go.Figure:
-    """Normal approximation of the two conversion rate distributions."""
     m  = result.metrics
     ex = result.experiment
 
@@ -264,7 +263,6 @@ def distribution_plot(result: AbTestResult, points: int = 300) -> go.Figure:
 
 
 def histogram(result: AbTestResult, sample_size: int = 1000, seed: int = 42) -> go.Figure:
-    """Bootstrap histogram of simulated conversion rates."""
     rng = np.random.default_rng(seed)
     m   = result.metrics
     ex  = result.experiment

@@ -18,9 +18,7 @@ from ab_testing_framework.validation import validate_input
 from ab_testing_framework.z_test import perform_z_test
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # VALIDATION
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_validate_input_returns_clean_dataclass():
     exp = validate_input(100, 12, 120, 18)
@@ -76,9 +74,7 @@ def test_validate_input_rejects_non_integer_values():
         validate_input(10.5, 1, 10, 1)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # METRICS
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_metrics_basic():
     exp = validate_input(1000, 100, 1000, 120)
@@ -104,9 +100,7 @@ def test_metrics_no_lift():
     assert m.relative_improvement == pytest.approx(0.0)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # EFFECT SIZE
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_effect_size_zero_baseline_returns_none():
     """relative_improvement in EffectSizeResult must also be None, not inf."""
@@ -129,9 +123,7 @@ def test_effect_size_no_lift():
     assert es.absolute_difference == 0.0
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # Z-TEST
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_z_test_two_sided_positive_lift():
     exp = validate_input(10000, 450, 10000, 520)
@@ -171,9 +163,7 @@ def test_z_test_zero_standard_error():
     assert math.isfinite(r.p_value)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # CONFIDENCE INTERVAL
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_ci_positive_lift_excludes_zero():
     exp = validate_input(10000, 450, 10000, 520)
@@ -204,9 +194,7 @@ def test_ci_invalid_confidence_level():
         calculate_ci(exp, confidence_level=1.5)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # ANALYSIS (end-to-end)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_run_ab_test_detects_positive_lift():
     result = run_ab_test(10000, 450, 10000, 520)
@@ -252,9 +240,7 @@ def test_run_ab_test_summary_contains_alternative():
     assert "two-sided" in result.summary
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # POWER ANALYSIS
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_power_analysis_reports_sample_size_and_power():
     r = analyze_power(10000, 450, 10000, 520)
@@ -289,9 +275,12 @@ def test_estimate_sample_size_validates_parameters():
         estimate_sample_size(0.1, 0.2, alpha=0.0)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+def test_estimate_sample_size_raises_on_equal_rates():
+    """Equal rates produce zero effect — must raise, not return a wrong number."""
+    with pytest.raises(ValueError, match="no detectable effect"):
+        estimate_sample_size(0.05, 0.05)
+
 # REPORT GENERATOR
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_report_generation_includes_summary_fields():
     result = run_ab_test(10000, 450, 10000, 520)
@@ -347,9 +336,7 @@ def test_power_analysis_is_reflected_in_summary():
     assert "Required sample size per group" in generate_summary(result)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # DATA LOADER
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_load_data_aggregated_single_row(tmp_path):
     csv = tmp_path / "single.csv"
@@ -435,3 +422,61 @@ def test_load_data_sample_file():
     exp = load_data(sample)
     assert exp.visitors_a > 0
     assert exp.visitors_b > 0
+
+
+# VISUALIZATION SMOKE TESTS
+
+import plotly.graph_objects as go
+from ab_testing_framework.visualization import (
+    bar_chart, confidence_plot, distribution_plot, histogram, z_score_plot,
+)
+
+
+@pytest.fixture(scope="module")
+def sample_result():
+    """Shared AbTestResult used by all visualization tests."""
+    return run_ab_test(10000, 450, 10000, 520)
+
+
+def test_bar_chart_returns_figure(sample_result):
+    fig = bar_chart(sample_result)
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) == 1          # single Bar trace
+    assert fig.data[0].type == "bar"
+
+
+def test_confidence_plot_returns_figure(sample_result):
+    fig = confidence_plot(sample_result)
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) >= 2          # CI line + lift dot
+
+
+def test_z_score_plot_returns_figure(sample_result):
+    fig = z_score_plot(sample_result)
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) >= 3          # normal curve + two critical region fills
+
+
+def test_distribution_plot_returns_figure(sample_result):
+    fig = distribution_plot(sample_result)
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) == 2          # control + treatment curves
+
+
+def test_histogram_returns_figure(sample_result):
+    fig = histogram(sample_result)
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) == 2          # control + treatment histograms
+
+
+def test_visualization_figures_have_titles(sample_result):
+    """All charts must carry a non-empty title."""
+    charts = [
+        bar_chart(sample_result),
+        confidence_plot(sample_result),
+        z_score_plot(sample_result),
+        distribution_plot(sample_result),
+        histogram(sample_result),
+    ]
+    for fig in charts:
+        assert fig.layout.title.text, f"Missing title on {fig}"

@@ -1,4 +1,4 @@
-"""Human-readable report generation."""
+"""Report generation"""
 
 from __future__ import annotations
 
