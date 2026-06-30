@@ -532,8 +532,12 @@ with left_col:
           <table class="stat-table">
             <tr><td class="stat-key">Z-score</td>
                 <td class="stat-val">{result.z_test.z_score:.4f}</td></tr>
-            <tr><td class="stat-key">P-value</td>
+            <tr><td class="stat-key">P-value (z-test)</td>
                 <td class="stat-val">{result.z_test.p_value:.4f}</td></tr>
+            <tr><td class="stat-key">Chi-square (χ²)</td>
+                <td class="stat-val">{result.chi_square.chi2_stat:.4f}</td></tr>
+            <tr><td class="stat-key">P-value (chi-square)</td>
+                <td class="stat-val">{result.chi_square.p_value:.4f}</td></tr>
             <tr><td class="stat-key">Significance level (α)</td>
                 <td class="stat-val">{alpha:.2f}</td></tr>
             <tr><td class="stat-key">95% CI — lower</td>
@@ -559,6 +563,10 @@ with right_col:
                 <td class="stat-val {lift_cls}">{rel_display}</td></tr>
             <tr><td class="stat-key">Cohen's h</td>
                 <td class="stat-val">{result.effect_size.cohens_h:.4f}</td></tr>
+            <tr><td class="stat-key">Cramér's V</td>
+                <td class="stat-val">{result.chi_square.cramers_v:.4f}</td></tr>
+            <tr><td class="stat-key">Yates correction</td>
+                <td class="stat-val">{'yes' if result.chi_square.yates_correction else 'no'}</td></tr>
             <tr><td class="stat-key">Observed power</td>
                 <td class="stat-val {'positive' if pa.power >= 0.8 else 'negative'}">{pa.power:.1%}</td></tr>
             <tr><td class="stat-key">Required n / group</td>

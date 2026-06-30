@@ -424,6 +424,99 @@ def test_load_data_sample_file():
     assert exp.visitors_b > 0
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# CHI-SQUARE TEST
+# ══════════════════════════════════════════════════════════════════════════════
+
+from ab_testing_framework.chi_square import perform_chi_square_test
+
+
+def test_chi_square_positive_lift_significant():
+    exp = validate_input(10000, 450, 10000, 520)
+    r = perform_chi_square_test(exp)
+    assert r.p_value < 0.05
+    assert r.chi2_stat > 0
+    assert r.degrees_of_freedom == 1
+    assert 0.0 <= r.cramers_v <= 1.0
+
+
+def test_chi_square_no_lift_not_significant():
+    exp = validate_input(5000, 250, 5000, 250)
+    r = perform_chi_square_test(exp)
+    assert r.p_value > 0.05
+    assert r.cramers_v == pytest.approx(0.0, abs=1e-9)
+
+
+def test_chi_square_p_value_matches_z_test_two_sided():
+    """Without Yates, χ² = z², so p-values should be very close."""
+    exp = validate_input(10000, 450, 10000, 520)
+    z   = perform_z_test(exp, alternative="two-sided")
+    cs  = perform_chi_square_test(exp, yates=False)
+    assert cs.p_value == pytest.approx(z.p_value, rel=0.01)
+
+
+def test_chi_square_yates_auto_applied_for_small_samples():
+    """Small expected counts should trigger Yates automatically."""
+    exp = validate_input(10, 1, 10, 3)
+    r = perform_chi_square_test(exp)
+    assert r.yates_correction is True
+
+
+def test_chi_square_yates_not_applied_for_large_samples():
+    """Large samples — all expected counts well above 5 — no Yates."""
+    exp = validate_input(10000, 450, 10000, 520)
+    r = perform_chi_square_test(exp)
+    assert r.yates_correction is False
+
+
+def test_chi_square_explicit_yates_override():
+    exp = validate_input(10000, 450, 10000, 520)
+    with_yates    = perform_chi_square_test(exp, yates=True)
+    without_yates = perform_chi_square_test(exp, yates=False)
+    assert with_yates.chi2_stat < without_yates.chi2_stat
+    assert with_yates.p_value > without_yates.p_value
+
+
+def test_chi_square_degenerate_all_zero():
+    """All-zero conversions — degenerate table must not crash."""
+    exp = validate_input(100, 0, 100, 0)
+    r = perform_chi_square_test(exp)
+    assert r.chi2_stat == 0.0
+    assert math.isfinite(r.p_value)
+
+
+def test_chi_square_in_run_ab_test():
+    result = run_ab_test(10000, 450, 10000, 520)
+    cs = result.chi_square
+    assert isinstance(cs.chi2_stat, float)
+    assert isinstance(cs.p_value, float)
+    assert isinstance(cs.yates_correction, bool)
+    assert 0.0 <= cs.cramers_v <= 1.0
+
+
+def test_chi_square_in_summary_report():
+    result = run_ab_test(10000, 450, 10000, 520)
+    summary = generate_summary(result)
+    assert "Chi-square" in summary
+    assert "Cram" in summary   # Cramér — avoid encoding issues in match
+
+
+def test_chi_square_in_markdown_report():
+    result = run_ab_test(10000, 450, 10000, 520)
+    md = generate_markdown_report(result)
+    assert "Chi-square" in md
+    assert "Cram" in md
+
+
+def test_chi_square_in_json_export(tmp_path):
+    result = run_ab_test(10000, 450, 10000, 520)
+    paths = save_report(result, output_dir=tmp_path, stem="chi_sq_test")
+    data = json.loads(paths["json"].read_text(encoding="utf-8"))
+    assert "chi_square" in data
+    assert "chi2_stat" in data["chi_square"]
+    assert "cramers_v" in data["chi_square"]
+
+
 # VISUALIZATION SMOKE TESTS
 
 import plotly.graph_objects as go

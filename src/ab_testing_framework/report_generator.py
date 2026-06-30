@@ -1,4 +1,20 @@
-"""Report generation"""
+"""Human-readable report generation.
+
+Provides three output formats:
+
+``generate_summary``
+    Plain-text summary aligned for terminal or log output.
+
+``generate_markdown_report``
+    GitHub-flavoured Markdown with a metrics table and sections for decision
+    and recommendation.
+
+``save_report``
+    Writes both a ``.md`` and a ``.json`` file to a given output directory.
+
+All formatters handle ``None`` values for ``relative_improvement`` by
+rendering ``"N/A"`` instead of raising a ``TypeError``.
+"""
 
 from __future__ import annotations
 
@@ -10,17 +26,19 @@ from .analysis import AbTestResult
 
 
 def _fmt_pct(value: float | None, decimals: int = 2) -> str:
-    """Format a float as a percentage, handling None gracefully."""
+    """Format a float as a percentage string, returning ``"N/A"`` for None."""
     if value is None:
         return "N/A"
     return f"{value:.{decimals}%}"
 
 
 def generate_summary(result: AbTestResult) -> str:
+    """Return a plain-text aligned summary of the A/B test result."""
     m  = result.metrics
     ci = result.confidence_interval
     es = result.effect_size
     pa = result.power_analysis
+    cs = result.chi_square
 
     lines = [
         "A/B Testing Summary",
@@ -29,8 +47,12 @@ def generate_summary(result: AbTestResult) -> str:
         f"Absolute lift:                   {_fmt_pct(m.absolute_difference)}",
         f"Relative lift:                   {_fmt_pct(m.relative_improvement)}",
         f"Z-score:                         {result.z_test.z_score:.4f}",
-        f"P-value:                         {result.z_test.p_value:.4f}",
+        f"P-value (z-test):                {result.z_test.p_value:.4f}",
         f"Test type:                       {result.z_test.alternative}",
+        f"Chi-square statistic:            {cs.chi2_stat:.4f}",
+        f"P-value (chi-square):            {cs.p_value:.4f}",
+        f"Cramér's V:                      {cs.cramers_v:.4f}",
+        f"Yates correction:                {'yes' if cs.yates_correction else 'no'}",
         f"{int(ci.confidence_level * 100)}% CI for lift:               "
         f"{_fmt_pct(ci.lower_bound, 4)} to {_fmt_pct(ci.upper_bound, 4)}",
         f"Cohen's h:                       {es.cohens_h:.4f}",
@@ -43,10 +65,12 @@ def generate_summary(result: AbTestResult) -> str:
 
 
 def generate_markdown_report(result: AbTestResult) -> str:
+    """Return a GitHub-flavoured Markdown report."""
     m  = result.metrics
     ci = result.confidence_interval
     es = result.effect_size
     pa = result.power_analysis
+    cs = result.chi_square
 
     return f"""# A/B Test Report
 
@@ -62,8 +86,12 @@ def generate_markdown_report(result: AbTestResult) -> str:
 | Absolute lift | {_fmt_pct(m.absolute_difference)} |
 | Relative lift | {_fmt_pct(m.relative_improvement)} |
 | Z-score | {result.z_test.z_score:.4f} |
-| P-value | {result.z_test.p_value:.4f} |
+| P-value (z-test) | {result.z_test.p_value:.4f} |
 | Test type | {result.z_test.alternative} |
+| Chi-square statistic | {cs.chi2_stat:.4f} |
+| P-value (chi-square) | {cs.p_value:.4f} |
+| Cramér's V | {cs.cramers_v:.4f} |
+| Yates correction | {'yes' if cs.yates_correction else 'no'} |
 | {int(ci.confidence_level * 100)}% CI lower | {_fmt_pct(ci.lower_bound, 4)} |
 | {int(ci.confidence_level * 100)}% CI upper | {_fmt_pct(ci.upper_bound, 4)} |
 | Cohen's h | {es.cohens_h:.4f} |
@@ -83,17 +111,18 @@ def save_report(
     output_dir: str | Path = "reports",
     stem: str | None = None,
 ) -> dict[str, Path]:
+    """Persist the report as both a Markdown and a JSON file."""
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_stem = stem or f"ab_test_report_{timestamp}"
     markdown_path = output_path / f"{file_stem}.md"
-    json_path = output_path / f"{file_stem}.json"
+    json_path     = output_path / f"{file_stem}.json"
 
     markdown_path.write_text(generate_markdown_report(result), encoding="utf-8")
 
-    # relative_improvement may be None; serialise as null in JSON
+    cs = result.chi_square
     json_path.write_text(
         json.dumps(
             {
@@ -112,6 +141,14 @@ def save_report(
                     "p_value": result.z_test.p_value,
                     "pooled_rate": result.z_test.pooled_rate,
                     "alternative": result.z_test.alternative,
+                },
+                "chi_square": {
+                    "chi2_stat": cs.chi2_stat,
+                    "p_value": cs.p_value,
+                    "degrees_of_freedom": cs.degrees_of_freedom,
+                    "yates_correction": cs.yates_correction,
+                    "cramers_v": cs.cramers_v,
+                    "expected_min": cs.expected_min,
                 },
                 "confidence_interval": {
                     "lower_bound": result.confidence_interval.lower_bound,
