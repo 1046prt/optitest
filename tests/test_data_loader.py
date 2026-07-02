@@ -75,3 +75,44 @@ def test_load_data_rejects_non_numeric_aggregated_rows(monkeypatch):
 
     with pytest.raises(ValueError, match="non-numeric"):
         load_data(StringIO("ignored"))
+
+
+def test_load_data_rejects_treatment_rows_with_too_many_conversions(monkeypatch):
+    frame = pd.DataFrame(
+        {
+            "visitors_a": [100],
+            "conversions_a": [4],
+            "visitors_b": [100],
+            "conversions_b": [120],
+        }
+    )
+    monkeypatch.setattr("ab_testing_framework.data_loader.pd.read_csv", lambda *_args, **_kwargs: frame)
+
+    with pytest.raises(ValueError, match="conversions_b > visitors_b"):
+        load_data(StringIO("ignored"))
+
+
+def test_load_data_rejects_non_numeric_per_user_values(monkeypatch):
+    frame = pd.DataFrame(
+        {
+            "variant": ["A", "B"],
+            "converted": [1, "bad"],
+        }
+    )
+    monkeypatch.setattr("ab_testing_framework.data_loader.pd.read_csv", lambda *_args, **_kwargs: frame)
+
+    with pytest.raises(ValueError, match="contains non-numeric values"):
+        load_data(StringIO("ignored"))
+
+
+def test_load_data_rejects_missing_variant_side(monkeypatch):
+    frame = pd.DataFrame(
+        {
+            "variant": ["A", "A"],
+            "converted": [1, 0],
+        }
+    )
+    monkeypatch.setattr("ab_testing_framework.data_loader.pd.read_csv", lambda *_args, **_kwargs: frame)
+
+    with pytest.raises(ValueError, match="must have at least one row"):
+        load_data(StringIO("ignored"))

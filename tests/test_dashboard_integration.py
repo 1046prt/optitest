@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from runpy import run_module
 from types import ModuleType
+from io import StringIO
+import sys
 
 import pytest
 
@@ -109,7 +111,7 @@ def fake_streamlit():
 
 
 def test_dashboard_script_renders_with_default_inputs(monkeypatch, fake_streamlit):
-    monkeypatch.setitem(__import__("sys").modules, "streamlit", fake_streamlit)
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
 
     run_module("dashboard.app", run_name="__main__")
 
@@ -118,6 +120,23 @@ def test_dashboard_script_renders_with_default_inputs(monkeypatch, fake_streamli
     assert len(fake_streamlit.charts) == 5
     assert fake_streamlit.errors == []
     assert fake_streamlit.buttons == ["Save to reports/"]
+
+
+def test_dashboard_script_uses_uploaded_csv(monkeypatch):
+    fake_streamlit = FakeStreamlit()
+    fake_streamlit.file_uploader = lambda *args, **kwargs: StringIO(
+        "variant,converted\n"
+        "A,1\n"
+        "A,0\n"
+        "B,1\n"
+        "B,1\n"
+    )
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+
+    run_module("dashboard.app", run_name="__main__")
+
+    assert any(metric["label"] == "Control rate" for metric in fake_streamlit.metrics)
+    assert any("A/B Test Results" in text for text in fake_streamlit.markdowns)
 
 
 def test_dashboard_helpers_remain_importable():

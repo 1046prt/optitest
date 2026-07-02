@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import ceil
 
+import numpy as np
 from statsmodels.stats.power import NormalIndPower
 from statsmodels.stats.proportion import proportion_effectsize
 
@@ -71,7 +72,7 @@ def estimate_sample_size(
         )
     solver = NormalIndPower()
     nobs = solver.solve_power(effect_size=effect_size, power=target_power, alpha=alpha, ratio=ratio)
-    return int(ceil(nobs))
+    return int(ceil(float(np.asarray(nobs).squeeze())))
 
 
 def analyze_power(
