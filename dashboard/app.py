@@ -336,85 +336,118 @@ def _lift_class(val: float) -> str:
     return ""
 
 
-# ── sidebar ────────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### Split Testing Suite")
-    st.markdown("---")
+if __name__ == "__main__":
+    # ── sidebar ────────────────────────────────────────────────────────────────
+    with st.sidebar:
+        st.markdown("### Split Testing Suite")
+        st.markdown("---")
 
-    st.markdown("#### Data source")
-    uploaded_file = st.file_uploader(
-        "Upload CSV", type=["csv"], label_visibility="collapsed",
-    )
+        st.markdown("#### Data source")
+        uploaded_file = st.file_uploader(
+            "Upload CSV", type=["csv"], label_visibility="collapsed",
+        )
 
-    if uploaded_file is None:
-        st.markdown("#### Control (A)")
-        visitors_a    = st.number_input("Visitors",    min_value=1, value=10_000, step=100, key="va")
-        conversions_a = st.number_input("Conversions", min_value=0, value=450,    step=1,   key="ca")
+        if uploaded_file is None:
+            st.markdown("#### Control (A)")
+            visitors_a    = st.number_input("Visitors",    min_value=1, value=10_000, step=100, key="va")
+            conversions_a = st.number_input("Conversions", min_value=0, value=450,    step=1,   key="ca")
 
-        st.markdown("#### Treatment (B)")
-        visitors_b    = st.number_input("Visitors",    min_value=1, value=10_000, step=100, key="vb")
-        conversions_b = st.number_input("Conversions", min_value=0, value=520,    step=1,   key="cb")
+            st.markdown("#### Treatment (B)")
+            visitors_b    = st.number_input("Visitors",    min_value=1, value=10_000, step=100, key="vb")
+            conversions_b = st.number_input("Conversions", min_value=0, value=520,    step=1,   key="cb")
 
-    st.markdown("#### Test settings")
-    alpha = st.slider(
-        "Significance level (α)",
-        min_value=0.01, max_value=0.20, value=0.05, step=0.01,
-        help="Threshold for rejecting H₀. Common values: 0.05 (standard) · 0.01 (strict) · 0.10 (exploratory).",
-    )
-    alternative = st.selectbox(
-        "Hypothesis",
-        options=["two-sided", "larger", "smaller"],
-        index=0,
-        help=(
-            "two-sided: test whether B ≠ A (most common).\n"
-            "larger: test whether B > A (directional, more power).\n"
-            "smaller: test whether B < A."
-        ),
-    )
+        st.markdown("#### Test settings")
+        alpha = st.slider(
+            "Significance level (α)",
+            min_value=0.01, max_value=0.20, value=0.05, step=0.01,
+            help="Threshold for rejecting H₀. Common values: 0.05 (standard) · 0.01 (strict) · 0.10 (exploratory).",
+        )
+        alternative = st.selectbox(
+            "Hypothesis",
+            options=["two-sided", "larger", "smaller"],
+            index=0,
+            help=(
+                "two-sided: test whether B ≠ A (most common).\n"
+                "larger: test whether B > A (directional, more power).\n"
+                "smaller: test whether B < A."
+            ),
+        )
 
-    st.markdown("---")
-    st.markdown("#### Sample CSV format")
-    _sample_csv = (
-        "visitors_a,conversions_a,visitors_b,conversions_b\n"
-        "10000,450,10000,520\n"
-    )
-    st.download_button(
-        label="Download template",
-        data=_sample_csv,
-        file_name="ab_test_template.csv",
-        mime="text/csv",
-        help="Use this as a starting point for your own experiment data.",
-    )
+        st.markdown("---")
+        st.markdown("#### Sample CSV format")
+        _sample_csv = (
+            "visitors_a,conversions_a,visitors_b,conversions_b\n"
+            "10000,450,10000,520\n"
+        )
+        st.download_button(
+            label="Download template",
+            data=_sample_csv,
+            file_name="ab_test_template.csv",
+            mime="text/csv",
+            help="Use this as a starting point for your own experiment data.",
+        )
 
-    st.markdown("---")
-    st.markdown(
-        "<p style='font-size:0.75rem;color:#555a72;line-height:1.5;'>"
-        "Two-proportion z-test · 95% CI<br>"
-        "Power via statsmodels NormalIndPower."
-        "</p>",
-        unsafe_allow_html=True,
-    )
+        st.markdown("---")
+        st.markdown(
+            "<p style='font-size:0.75rem;color:#555a72;line-height:1.5;'>"
+            "Two-proportion z-test · 95% CI<br>"
+            "Power via statsmodels NormalIndPower."
+            "</p>",
+            unsafe_allow_html=True,
+        )
 
-# ── load CSV if uploaded ───────────────────────────────────────────────────────
-if uploaded_file is not None:
-    try:
-        experiment_data = load_data(uploaded_file)
-        visitors_a    = experiment_data.visitors_a
-        conversions_a = experiment_data.conversions_a
-        visitors_b    = experiment_data.visitors_b
-        conversions_b = experiment_data.conversions_b
-    except Exception as exc:
-        st.error(f"Could not read CSV: {exc}")
+    # ── load CSV if uploaded ───────────────────────────────────────────────────
+    if uploaded_file is not None:
+        try:
+            experiment_data = load_data(uploaded_file)
+            visitors_a    = experiment_data.visitors_a
+            conversions_a = experiment_data.conversions_a
+            visitors_b    = experiment_data.visitors_b
+            conversions_b = experiment_data.conversions_b
+        except Exception as exc:
+            st.error(f"Could not read CSV: {exc}")
+            st.stop()
+
+    # ── input validation ───────────────────────────────────────────────────────
+    input_errors: list[str] = []
+    if conversions_a > visitors_a:
+        input_errors.append(f"Control: conversions ({conversions_a:,}) exceed visitors ({visitors_a:,}).")
+    if conversions_b > visitors_b:
+        input_errors.append(f"Treatment: conversions ({conversions_b:,}) exceed visitors ({visitors_b:,}).")
+
+    if input_errors:
+        st.markdown(
+            """
+            <div class="page-header">
+                <h2>A/B Test Results</h2>
+                <p>Two-proportion z-test &nbsp;·&nbsp; confidence intervals &nbsp;·&nbsp; power analysis</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        for err in input_errors:
+            st.error(f"⚠ {err}")
         st.stop()
 
-# ── input validation ───────────────────────────────────────────────────────────
-input_errors: list[str] = []
-if conversions_a > visitors_a:
-    input_errors.append(f"Control: conversions ({conversions_a:,}) exceed visitors ({visitors_a:,}).")
-if conversions_b > visitors_b:
-    input_errors.append(f"Treatment: conversions ({conversions_b:,}) exceed visitors ({visitors_b:,}).")
+    # ── run analysis (cached) ──────────────────────────────────────────────────
+    try:
+        result = _run(
+            int(visitors_a), int(conversions_a),
+            int(visitors_b), int(conversions_b),
+            float(alpha),
+            alternative,
+        )
+    except ValueError as exc:
+        st.error(f"Validation error: {exc}")
+        st.stop()
+    except Exception as exc:
+        st.error(f"Analysis failed: {exc}")
+        st.stop()
 
-if input_errors:
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE CONTENT
+    # ══════════════════════════════════════════════════════════════════════════
+
     st.markdown(
         """
         <div class="page-header">
@@ -424,226 +457,194 @@ if input_errors:
         """,
         unsafe_allow_html=True,
     )
-    for err in input_errors:
-        st.error(f"⚠ {err}")
-    st.stop()
 
-# ── run analysis (cached) ──────────────────────────────────────────────────────
-try:
-    result = _run(
-        int(visitors_a), int(conversions_a),
-        int(visitors_b), int(conversions_b),
-        float(alpha),
-        alternative,
+    # ── section: key metrics ───────────────────────────────────────────────────
+    st.markdown("<div class='section-label'>Key metrics</div>", unsafe_allow_html=True)
+
+    m  = result.metrics
+    pa = result.power_analysis
+    ci = result.confidence_interval
+    is_sig      = result.z_test.p_value < alpha
+    is_positive = ci.lower_bound > 0
+
+    rel_display = _rel_lift_display(m.relative_improvement)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Control rate",   f"{m.conversion_rate_a:.2%}")
+    c2.metric("Treatment rate", f"{m.conversion_rate_b:.2%}")
+    c3.metric(
+        "Absolute lift",
+        f"{m.absolute_difference:.2%}",
+        delta=f"{rel_display} relative" if m.relative_improvement is not None else "N/A",
+        delta_color="normal" if (m.relative_improvement or 0) >= 0 else "inverse",
     )
-except ValueError as exc:
-    st.error(f"Validation error: {exc}")
-    st.stop()
-except Exception as exc:
-    st.error(f"Analysis failed: {exc}")
-    st.stop()
+    c4.metric("P-value", f"{result.z_test.p_value:.4f}")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE CONTENT
-# ══════════════════════════════════════════════════════════════════════════════
-
-st.markdown(
-    """
-    <div class="page-header">
-        <h2>A/B Test Results</h2>
-        <p>Two-proportion z-test &nbsp;·&nbsp; confidence intervals &nbsp;·&nbsp; power analysis</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ── section: key metrics ───────────────────────────────────────────────────────
-st.markdown("<div class='section-label'>Key metrics</div>", unsafe_allow_html=True)
-
-m  = result.metrics
-pa = result.power_analysis
-ci = result.confidence_interval
-is_sig      = result.z_test.p_value < alpha
-is_positive = ci.lower_bound > 0
-
-rel_display = _rel_lift_display(m.relative_improvement)
-
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Control rate",   f"{m.conversion_rate_a:.2%}")
-c2.metric("Treatment rate", f"{m.conversion_rate_b:.2%}")
-c3.metric(
-    "Absolute lift",
-    f"{m.absolute_difference:.2%}",
-    delta=f"{rel_display} relative" if m.relative_improvement is not None else "N/A",
-    delta_color="normal" if (m.relative_improvement or 0) >= 0 else "inverse",
-)
-c4.metric("P-value", f"{result.z_test.p_value:.4f}")
-
-# p-value badge row
-st.markdown(
-    f"<div style='margin-top:0.4rem;margin-bottom:0.25rem;font-size:0.84rem;"
-    f"color:var(--text-secondary);'>Significance: {_pval_badge(result.z_test.p_value)}</div>",
-    unsafe_allow_html=True,
-)
-
-# underpowered warning
-if pa.power < 0.8:
-    needed = pa.required_sample_size_per_group
-    current = min(visitors_a, visitors_b)
+    # p-value badge row
     st.markdown(
-        f"<div class='warn-block'>"
-        f"<strong>⚠ Underpowered sample.</strong> Observed power is {pa.power:.1%} — "
-        f"below the 80% threshold. You need ~<strong>{needed:,}</strong> visitors per group; "
-        f"currently running {current:,}. Results may not be reliable."
-        f"</div>",
+        f"<div style='margin-top:0.4rem;margin-bottom:0.25rem;font-size:0.84rem;"
+        f"color:var(--text-secondary);'>Significance: {_pval_badge(result.z_test.p_value)}</div>",
         unsafe_allow_html=True,
     )
 
-# ── section: decision ──────────────────────────────────────────────────────────
-st.markdown("<div class='section-label'>Decision</div>", unsafe_allow_html=True)
-
-if is_sig and is_positive:
-    card_cls, label = "positive", "Significant · Deploy"
-elif is_sig and not is_positive:
-    card_cls, label = "negative", "Significant · Do not deploy"
-else:
-    card_cls, label = "neutral", "Not significant · Hold"
-
-st.markdown(
-    f"""
-    <div class="decision-card {card_cls}">
-        <div class="decision-label">{label}</div>
-        <p class="decision-text">{result.recommendation}</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ── section: statistical detail ────────────────────────────────────────────────
-st.markdown("<div class='section-label'>Statistical detail</div>", unsafe_allow_html=True)
-
-lift_cls = _lift_class(m.absolute_difference)
-left_col, right_col = st.columns(2)
-
-with left_col:
-    st.markdown(
-        f"""
-        <div class="stat-block">
-          <table class="stat-table">
-            <tr><td class="stat-key">Z-score</td>
-                <td class="stat-val">{result.z_test.z_score:.4f}</td></tr>
-            <tr><td class="stat-key">P-value (z-test)</td>
-                <td class="stat-val">{result.z_test.p_value:.4f}</td></tr>
-            <tr><td class="stat-key">Chi-square (χ²)</td>
-                <td class="stat-val">{result.chi_square.chi2_stat:.4f}</td></tr>
-            <tr><td class="stat-key">P-value (chi-square)</td>
-                <td class="stat-val">{result.chi_square.p_value:.4f}</td></tr>
-            <tr><td class="stat-key">Significance level (α)</td>
-                <td class="stat-val">{alpha:.2f}</td></tr>
-            <tr><td class="stat-key">95% CI — lower</td>
-                <td class="stat-val {_lift_class(ci.lower_bound)}">{ci.lower_bound:.4%}</td></tr>
-            <tr><td class="stat-key">95% CI — upper</td>
-                <td class="stat-val {_lift_class(ci.upper_bound)}">{ci.upper_bound:.4%}</td></tr>
-            <tr><td class="stat-key">Decision</td>
-                <td class="stat-val">{result.decision}</td></tr>
-          </table>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with right_col:
-    st.markdown(
-        f"""
-        <div class="stat-block">
-          <table class="stat-table">
-            <tr><td class="stat-key">Absolute lift</td>
-                <td class="stat-val {lift_cls}">{m.absolute_difference:.4%}</td></tr>
-            <tr><td class="stat-key">Relative lift</td>
-                <td class="stat-val {lift_cls}">{rel_display}</td></tr>
-            <tr><td class="stat-key">Cohen's h</td>
-                <td class="stat-val">{result.effect_size.cohens_h:.4f}</td></tr>
-            <tr><td class="stat-key">Cramér's V</td>
-                <td class="stat-val">{result.chi_square.cramers_v:.4f}</td></tr>
-            <tr><td class="stat-key">Yates correction</td>
-                <td class="stat-val">{'yes' if result.chi_square.yates_correction else 'no'}</td></tr>
-            <tr><td class="stat-key">Observed power</td>
-                <td class="stat-val {'positive' if pa.power >= 0.8 else 'negative'}">{pa.power:.1%}</td></tr>
-            <tr><td class="stat-key">Required n / group</td>
-                <td class="stat-val">{pa.required_sample_size_per_group:,}</td></tr>
-            <tr><td class="stat-key">Target power</td>
-                <td class="stat-val">{pa.target_power:.0%}</td></tr>
-          </table>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# ── section: visual analysis ───────────────────────────────────────────────────
-st.markdown("<div class='section-label'>Visual analysis</div>", unsafe_allow_html=True)
-
-# Row 1: conversion bars + CI plot
-r1l, r1r = st.columns(2)
-with r1l:
-    st.plotly_chart(bar_chart(result), use_container_width=True)
-with r1r:
-    st.plotly_chart(confidence_plot(result), use_container_width=True)
-
-# Row 2: z-score distribution + sampling distributions
-r2l, r2r = st.columns(2)
-with r2l:
-    st.plotly_chart(z_score_plot(result), use_container_width=True)
-with r2r:
-    st.plotly_chart(distribution_plot(result), use_container_width=True)
-
-# Row 3: bootstrap histogram (full width)
-st.plotly_chart(histogram(result), use_container_width=True)
-
-# ── section: export ────────────────────────────────────────────────────────────
-st.markdown("<div class='section-label'>Export</div>", unsafe_allow_html=True)
-
-report_stem    = f"ab_test_report_{datetime.now():%Y%m%d_%H%M%S}"
-report_markdown = generate_markdown_report(result)
-
-with st.expander("Markdown report"):
-    st.code(report_markdown, language="markdown")
-    col_dl, col_save, _ = st.columns([1, 1, 4])
-    with col_dl:
-        st.download_button(
-            label="Download .md",
-            data=report_markdown,
-            file_name=f"{report_stem}.md",
-            mime="text/markdown",
+    # underpowered warning
+    if pa.power < 0.8:
+        needed = pa.required_sample_size_per_group
+        current = min(visitors_a, visitors_b)
+        st.markdown(
+            f"<div class='warn-block'>"
+            f"<strong>⚠ Underpowered sample.</strong> Observed power is {pa.power:.1%} — "
+            f"below the 80% threshold. You need ~<strong>{needed:,}</strong> visitors per group; "
+            f"currently running {current:,}. Results may not be reliable."
+            f"</div>",
+            unsafe_allow_html=True,
         )
-    with col_save:
-        if st.button("Save to reports/"):
-            saved = save_report(
-                result,
-                output_dir=PROJECT_ROOT / "reports",
-                stem=report_stem,
-            )
-            st.success(f"Saved: {saved['markdown'].name}  ·  {saved['json'].name}")
 
-with st.expander("Power analysis detail"):
+    # ── section: decision ──────────────────────────────────────────────────────
+    st.markdown("<div class='section-label'>Decision</div>", unsafe_allow_html=True)
+
+    if is_sig and is_positive:
+        card_cls, label = "positive", "Significant · Deploy"
+    elif is_sig and not is_positive:
+        card_cls, label = "negative", "Significant · Do not deploy"
+    else:
+        card_cls, label = "neutral", "Not significant · Hold"
+
     st.markdown(
         f"""
-        **Observed power:** {pa.power:.1%} at α = {pa.alpha:.2f}
-
-        To reach **{pa.target_power:.0%} power**, you need approximately
-        **{pa.required_sample_size_per_group:,} visitors per group**.
-        Currently running **{int(visitors_a):,}** (control) and
-        **{int(visitors_b):,}** (treatment).
-
-        {'⚠ Current sample is below the required size — interpret results with caution.' if min(visitors_a, visitors_b) < pa.required_sample_size_per_group else '✓ Sample size meets the power requirement.'}
-        """
+        <div class="decision-card {card_cls}">
+            <div class="decision-label">{label}</div>
+            <p class="decision-text">{result.recommendation}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-# ── footnote ───────────────────────────────────────────────────────────────────
-st.markdown(
-    f"<p class='footnote'>"
-    f"Decision rule: reject H₀ when p-value &lt; α and the lift confidence interval "
-    f"excludes zero. Test is <strong>{result.z_test.alternative}</strong>. "
-    f"Power calculated via statsmodels NormalIndPower."
-    f"</p>",
-    unsafe_allow_html=True,
-)
+    # ── section: statistical detail ──────────────────────────────────────────────
+    st.markdown("<div class='section-label'>Statistical detail</div>", unsafe_allow_html=True)
+
+    lift_cls = _lift_class(m.absolute_difference)
+    left_col, right_col = st.columns(2)
+
+    with left_col:
+        st.markdown(
+            f"""
+            <div class="stat-block">
+              <table class="stat-table">
+                <tr><td class="stat-key">Z-score</td>
+                    <td class="stat-val">{result.z_test.z_score:.4f}</td></tr>
+                <tr><td class="stat-key">P-value (z-test)</td>
+                    <td class="stat-val">{result.z_test.p_value:.4f}</td></tr>
+                <tr><td class="stat-key">Chi-square (χ²)</td>
+                    <td class="stat-val">{result.chi_square.chi2_stat:.4f}</td></tr>
+                <tr><td class="stat-key">P-value (chi-square)</td>
+                    <td class="stat-val">{result.chi_square.p_value:.4f}</td></tr>
+                <tr><td class="stat-key">Significance level (α)</td>
+                    <td class="stat-val">{alpha:.2f}</td></tr>
+                <tr><td class="stat-key">95% CI — lower</td>
+                    <td class="stat-val {_lift_class(ci.lower_bound)}">{ci.lower_bound:.4%}</td></tr>
+                <tr><td class="stat-key">95% CI — upper</td>
+                    <td class="stat-val {_lift_class(ci.upper_bound)}">{ci.upper_bound:.4%}</td></tr>
+                <tr><td class="stat-key">Decision</td>
+                    <td class="stat-val">{result.decision}</td></tr>
+              </table>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with right_col:
+        st.markdown(
+            f"""
+            <div class="stat-block">
+              <table class="stat-table">
+                <tr><td class="stat-key">Absolute lift</td>
+                    <td class="stat-val {lift_cls}">{m.absolute_difference:.4%}</td></tr>
+                <tr><td class="stat-key">Relative lift</td>
+                    <td class="stat-val {lift_cls}">{rel_display}</td></tr>
+                <tr><td class="stat-key">Cohen's h</td>
+                    <td class="stat-val">{result.effect_size.cohens_h:.4f}</td></tr>
+                <tr><td class="stat-key">Cramér's V</td>
+                    <td class="stat-val">{result.chi_square.cramers_v:.4f}</td></tr>
+                <tr><td class="stat-key">Yates correction</td>
+                    <td class="stat-val">{'yes' if result.chi_square.yates_correction else 'no'}</td></tr>
+                <tr><td class="stat-key">Observed power</td>
+                    <td class="stat-val {'positive' if pa.power >= 0.8 else 'negative'}">{pa.power:.1%}</td></tr>
+                <tr><td class="stat-key">Required n / group</td>
+                    <td class="stat-val">{pa.required_sample_size_per_group:,}</td></tr>
+                <tr><td class="stat-key">Target power</td>
+                    <td class="stat-val">{pa.target_power:.0%}</td></tr>
+              </table>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # ── section: visual analysis ────────────────────────────────────────────────
+    st.markdown("<div class='section-label'>Visual analysis</div>", unsafe_allow_html=True)
+
+    # Row 1: conversion bars + CI plot
+    r1l, r1r = st.columns(2)
+    with r1l:
+        st.plotly_chart(bar_chart(result), use_container_width=True)
+    with r1r:
+        st.plotly_chart(confidence_plot(result), use_container_width=True)
+
+    # Row 2: z-score distribution + sampling distributions
+    r2l, r2r = st.columns(2)
+    with r2l:
+        st.plotly_chart(z_score_plot(result), use_container_width=True)
+    with r2r:
+        st.plotly_chart(distribution_plot(result), use_container_width=True)
+
+    # Row 3: bootstrap histogram (full width)
+    st.plotly_chart(histogram(result), use_container_width=True)
+
+    # ── section: export ──────────────────────────────────────────────────────────
+    st.markdown("<div class='section-label'>Export</div>", unsafe_allow_html=True)
+
+    report_stem    = f"ab_test_report_{datetime.now():%Y%m%d_%H%M%S}"
+    report_markdown = generate_markdown_report(result)
+
+    with st.expander("Markdown report"):
+        st.code(report_markdown, language="markdown")
+        col_dl, col_save, _ = st.columns([1, 1, 4])
+        with col_dl:
+            st.download_button(
+                label="Download .md",
+                data=report_markdown,
+                file_name=f"{report_stem}.md",
+                mime="text/markdown",
+            )
+        with col_save:
+            if st.button("Save to reports/"):
+                saved = save_report(
+                    result,
+                    output_dir=PROJECT_ROOT / "reports",
+                    stem=report_stem,
+                )
+                st.success(f"Saved: {saved['markdown'].name}  ·  {saved['json'].name}")
+
+    with st.expander("Power analysis detail"):
+        st.markdown(
+            f"""
+            **Observed power:** {pa.power:.1%} at α = {pa.alpha:.2f}
+
+            To reach **{pa.target_power:.0%} power**, you need approximately
+            **{pa.required_sample_size_per_group:,} visitors per group**.
+            Currently running **{int(visitors_a):,}** (control) and
+            **{int(visitors_b):,}** (treatment).
+
+            {'⚠ Current sample is below the required size — interpret results with caution.' if min(visitors_a, visitors_b) < pa.required_sample_size_per_group else '✓ Sample size meets the power requirement.'}
+            """
+        )
+
+    # ── footnote ────────────────────────────────────────────────────────────────
+    st.markdown(
+        f"<p class='footnote'>"
+        f"Decision rule: reject H₀ when p-value &lt; α and the lift confidence interval "
+        f"excludes zero. Test is <strong>{result.z_test.alternative}</strong>. "
+        f"Power calculated via statsmodels NormalIndPower."
+        f"</p>",
+        unsafe_allow_html=True,
+    )
