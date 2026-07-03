@@ -74,6 +74,12 @@ def test_validate_input_rejects_non_integer_values():
         validate_input(10.5, 1, 10, 1)
 
 
+def test_validate_input_accepts_whole_float_values():
+    exp = validate_input(10.0, 1.0, 20.0, 2.0)
+    assert exp.visitors_a == 10
+    assert exp.conversions_b == 2
+
+
 # METRICS
 
 def test_metrics_basic():
@@ -315,6 +321,7 @@ def test_save_report_persists_files(tmp_path):
 
     assert paths["markdown"].exists()
     assert paths["json"].exists()
+    assert set(paths.keys()) == {"markdown", "json"}
     assert paths["markdown"].read_text(encoding="utf-8").startswith("# A/B Test Report")
 
     data = json.loads(paths["json"].read_text(encoding="utf-8"))

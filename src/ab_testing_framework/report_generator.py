@@ -21,8 +21,14 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
 
 from .analysis import AbTestResult
+
+
+class ReportPaths(TypedDict):
+    markdown: Path
+    json: Path
 
 
 def _fmt_pct(value: float | None, decimals: int = 2) -> str:
@@ -110,7 +116,7 @@ def save_report(
     result: AbTestResult,
     output_dir: str | Path = "reports",
     stem: str | None = None,
-) -> dict[str, Path]:
+) -> ReportPaths:
     """Persist the report as both a Markdown and a JSON file."""
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)

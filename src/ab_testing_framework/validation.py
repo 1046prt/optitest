@@ -3,6 +3,52 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, TypedDict
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+
+class ExperimentInputDict(TypedDict):
+    visitors_a: int
+    conversions_a: int
+    visitors_b: int
+    conversions_b: int
+    alpha: float
+
+
+class ExperimentInputModel(BaseModel):
+    visitors_a: int
+    conversions_a: int
+    visitors_b: int
+    conversions_b: int
+    alpha: float = Field(default=0.05)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_whole_numbers(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            raise TypeError("Experiment input must be provided as a mapping")
+
+        coerced = dict(data)
+        for field_name in ("visitors_a", "conversions_a", "visitors_b", "conversions_b"):
+            coerced[field_name] = _coerce_int(coerced[field_name], field_name)
+        return coerced
+
+    @model_validator(mode="after")
+    def _validate_ranges(self) -> "ExperimentInputModel":
+        if self.visitors_a <= 0 or self.visitors_b <= 0:
+            raise ValueError("visitor counts must be greater than zero")
+        if self.conversions_a < 0 or self.conversions_b < 0:
+            raise ValueError("conversion counts cannot be negative")
+        if self.conversions_a > self.visitors_a:
+            raise ValueError("conversions_a cannot exceed visitors_a")
+        if self.conversions_b > self.visitors_b:
+            raise ValueError("conversions_b cannot exceed visitors_b")
+        if not 0 < self.alpha < 1:
+            raise ValueError("alpha must be between 0 and 1")
+        return self
 
 
 @dataclass(frozen=True)
@@ -13,7 +59,7 @@ class ExperimentInput:
     conversions_b: int
     alpha: float = 0.05
 
-    def to_dict(self) -> dict[str, float | int]:
+    def to_dict(self) -> ExperimentInputDict:
         return {
             "visitors_a": self.visitors_a,
             "conversions_a": self.conversions_a,
@@ -40,26 +86,26 @@ def validate_input(
     conversions_b: int | float,
     alpha: float = 0.05,
 ) -> ExperimentInput:
-    visitors_a_i = _coerce_int(visitors_a, "visitors_a")
-    conversions_a_i = _coerce_int(conversions_a, "conversions_a")
-    visitors_b_i = _coerce_int(visitors_b, "visitors_b")
-    conversions_b_i = _coerce_int(conversions_b, "conversions_b")
-
-    if visitors_a_i <= 0 or visitors_b_i <= 0:
-        raise ValueError("visitor counts must be greater than zero")
-    if conversions_a_i < 0 or conversions_b_i < 0:
-        raise ValueError("conversion counts cannot be negative")
-    if conversions_a_i > visitors_a_i:
-        raise ValueError("conversions_a cannot exceed visitors_a")
-    if conversions_b_i > visitors_b_i:
-        raise ValueError("conversions_b cannot exceed visitors_b")
-    if not 0 < alpha < 1:
-        raise ValueError("alpha must be between 0 and 1")
+    try:
+        model = ExperimentInputModel.model_validate(
+            {
+                "visitors_a": visitors_a,
+                "conversions_a": conversions_a,
+                "visitors_b": visitors_b,
+                "conversions_b": conversions_b,
+                "alpha": alpha,
+            }
+        )
+    except ValidationError as exc:
+        first_message = exc.errors()[0].get("msg", "Invalid experiment input")
+        if first_message.startswith("Value error, "):
+            first_message = first_message.removeprefix("Value error, ")
+        raise ValueError(first_message) from exc
 
     return ExperimentInput(
-        visitors_a=visitors_a_i,
-        conversions_a=conversions_a_i,
-        visitors_b=visitors_b_i,
-        conversions_b=conversions_b_i,
-        alpha=float(alpha),
+        visitors_a=model.visitors_a,
+        conversions_a=model.conversions_a,
+        visitors_b=model.visitors_b,
+        conversions_b=model.conversions_b,
+        alpha=float(model.alpha),
     )

@@ -17,10 +17,12 @@ if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
 from ab_testing_framework.analysis import run_ab_test          # noqa: E402
+from ab_testing_framework.analysis import AbTestResult         # noqa: E402
 from ab_testing_framework.data_loader import load_data         # noqa: E402
 from ab_testing_framework.report_generator import (            # noqa: E402
     generate_markdown_report, save_report,
 )
+from ab_testing_framework.validation import ExperimentInput    # noqa: E402
 from ab_testing_framework.visualization import (               # noqa: E402
     bar_chart, confidence_plot, distribution_plot,
     histogram, z_score_plot,
@@ -309,7 +311,7 @@ div[data-testid="stExpander"] code {
 
 # ── cached analysis ────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
-def _run(va: int, ca: int, vb: int, cb: int, alpha: float, alternative: str):
+def _run(va: int, ca: int, vb: int, cb: int, alpha: float, alternative: str) -> AbTestResult:
     return run_ab_test(va, ca, vb, cb, alpha=alpha, alternative=alternative)
 
 
@@ -345,7 +347,7 @@ def _uploaded_csv_help() -> str:
     )
 
 
-def _load_uploaded_experiment(uploaded_file):
+def _load_uploaded_experiment(uploaded_file: object) -> tuple[ExperimentInput | None, str | None]:
     try:
         return load_data(uploaded_file), None
     except Exception as exc:
