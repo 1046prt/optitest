@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from io import StringIO
 from collections.abc import Callable
 from runpy import run_module
 from types import ModuleType
-from io import StringIO
 import sys
 
 import pytest
@@ -43,6 +43,10 @@ class FakeStreamlit(ModuleType):
         self.charts: list[object] = []
         self.buttons: list[str] = []
         self.downloads: list[str] = []
+        self.warnings: list[str] = []
+        self.infos: list[str] = []
+        self.captions: list[str] = []
+        self.widget_calls: list[tuple[str, dict[str, object]]] = []
         self.config: dict[str, object] = {}
         self.sidebar = _DummyBlock(self, "sidebar")
 
@@ -58,21 +62,29 @@ class FakeStreamlit(ModuleType):
     def markdown(self, text, unsafe_allow_html=False):
         self.markdowns.append(text)
 
+    def caption(self, text):
+        self.captions.append(text)
+
     def file_uploader(self, *args, **kwargs):
+        self.widget_calls.append(("file_uploader", kwargs))
         return None
 
     def number_input(self, *args, **kwargs):
+        self.widget_calls.append(("number_input", kwargs))
         return kwargs.get("value", 0)
 
     def slider(self, *args, **kwargs):
+        self.widget_calls.append(("slider", kwargs))
         return kwargs.get("value", 0.0)
 
     def selectbox(self, *args, **kwargs):
+        self.widget_calls.append(("selectbox", kwargs))
         options = kwargs.get("options", [])
         index = kwargs.get("index", 0)
         return options[index]
 
     def download_button(self, *args, **kwargs):
+        self.widget_calls.append(("download_button", kwargs))
         label = kwargs.get("label") or (args[0] if args else "download")
         self.downloads.append(label)
         return False
@@ -101,6 +113,12 @@ class FakeStreamlit(ModuleType):
     def error(self, text):
         self.errors.append(text)
 
+    def warning(self, text):
+        self.warnings.append(text)
+
+    def info(self, text):
+        self.infos.append(text)
+
     def stop(self):
         raise AssertionError("dashboard requested an early stop")
 
@@ -120,6 +138,8 @@ def test_dashboard_script_renders_with_default_inputs(monkeypatch, fake_streamli
     assert len(fake_streamlit.charts) == 5
     assert fake_streamlit.errors == []
     assert fake_streamlit.buttons == ["Save to reports/"]
+    assert any(call[0] == "file_uploader" and call[1].get("help") for call in fake_streamlit.widget_calls)
+    assert any(call[0] == "number_input" and call[1].get("help") for call in fake_streamlit.widget_calls)
 
 
 def test_dashboard_script_uses_uploaded_csv(monkeypatch):
@@ -137,6 +157,19 @@ def test_dashboard_script_uses_uploaded_csv(monkeypatch):
 
     assert any(metric["label"] == "Control rate" for metric in fake_streamlit.metrics)
     assert any("A/B Test Results" in text for text in fake_streamlit.markdowns)
+
+
+def test_dashboard_recovers_from_invalid_csv(monkeypatch):
+    fake_streamlit = FakeStreamlit()
+    fake_streamlit.file_uploader = lambda *args, **kwargs: StringIO("foo,bar\n1,2\n")
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+
+    run_module("dashboard.app", run_name="__main__")
+
+    assert fake_streamlit.warnings
+    assert fake_streamlit.infos
+    assert len(fake_streamlit.charts) == 5
+    assert any("uploaded CSV" in warning or "Could not use" in warning for warning in fake_streamlit.warnings)
 
 
 def test_dashboard_helpers_remain_importable():

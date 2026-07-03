@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -26,6 +27,7 @@ from ab_testing_framework.visualization import (               # noqa: E402
 )
 
 APP_TITLE = "Split Testing Suite"
+logger = logging.getLogger(__name__)
 
 # ── page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -336,6 +338,30 @@ def _lift_class(val: float) -> str:
     return ""
 
 
+def _uploaded_csv_help() -> str:
+    return (
+        "Upload an aggregated CSV with visitors_a/conversions_a/visitors_b/conversions_b, "
+        "or a per-user CSV with variant and converted. Commas, semicolons, tabs, and UTF-8 BOMs are handled automatically."
+    )
+
+
+def _load_uploaded_experiment(uploaded_file):
+    try:
+        return load_data(uploaded_file), None
+    except Exception as exc:
+        source_name = getattr(uploaded_file, "name", "uploaded file")
+        logger.exception(
+            "dashboard_csv_load_failed",
+            extra={"source": source_name},
+        )
+        message = (
+            f"Could not use {source_name}: {exc}. "
+            "Check that the file uses one of the supported column layouts, has a consistent delimiter, "
+            "and contains numeric visitor/conversion counts. The dashboard will keep the manual inputs so you can continue."
+        )
+        return None, message
+
+
 if __name__ == "__main__":
     # ── sidebar ────────────────────────────────────────────────────────────────
     with st.sidebar:
@@ -345,16 +371,50 @@ if __name__ == "__main__":
         st.markdown("#### Data source")
         uploaded_file = st.file_uploader(
             "Upload CSV", type=["csv"], label_visibility="collapsed",
+            help=_uploaded_csv_help(),
+        )
+        st.caption("CSV upload is optional. If it fails, the manual inputs below remain usable.")
+
+        st.markdown("#### Control (A)")
+        visitors_a = st.number_input(
+            "Visitors",
+            min_value=1,
+            value=10_000,
+            step=100,
+            key="va",
+            help="Total visitors in the control group. Must be greater than zero.",
+        )
+        conversions_a = st.number_input(
+            "Conversions",
+            min_value=0,
+            value=450,
+            step=1,
+            key="ca",
+            help="Number of conversions in the control group. Must not exceed visitors.",
         )
 
-        if uploaded_file is None:
-            st.markdown("#### Control (A)")
-            visitors_a    = st.number_input("Visitors",    min_value=1, value=10_000, step=100, key="va")
-            conversions_a = st.number_input("Conversions", min_value=0, value=450,    step=1,   key="ca")
+        st.markdown("#### Treatment (B)")
+        visitors_b = st.number_input(
+            "Visitors",
+            min_value=1,
+            value=10_000,
+            step=100,
+            key="vb",
+            help="Total visitors in the treatment group. Must be greater than zero.",
+        )
+        conversions_b = st.number_input(
+            "Conversions",
+            min_value=0,
+            value=520,
+            step=1,
+            key="cb",
+            help="Number of conversions in the treatment group. Must not exceed visitors.",
+        )
 
-            st.markdown("#### Treatment (B)")
-            visitors_b    = st.number_input("Visitors",    min_value=1, value=10_000, step=100, key="vb")
-            conversions_b = st.number_input("Conversions", min_value=0, value=520,    step=1,   key="cb")
+        st.markdown("#### Uploaded CSV preview")
+        st.caption(
+            "If the CSV loads successfully, its values override the manual inputs. If it fails, the dashboard keeps the values above."
+        )
 
         st.markdown("#### Test settings")
         alpha = st.slider(
@@ -397,16 +457,20 @@ if __name__ == "__main__":
         )
 
     # ── load CSV if uploaded ───────────────────────────────────────────────────
+    uploaded_error = None
     if uploaded_file is not None:
-        try:
-            experiment_data = load_data(uploaded_file)
+        experiment_data, uploaded_error = _load_uploaded_experiment(uploaded_file)
+        if experiment_data is not None:
             visitors_a    = experiment_data.visitors_a
             conversions_a = experiment_data.conversions_a
             visitors_b    = experiment_data.visitors_b
             conversions_b = experiment_data.conversions_b
-        except Exception as exc:
-            st.error(f"Could not read CSV: {exc}")
-            st.stop()
+            st.info("Loaded values from the uploaded CSV.")
+        else:
+            st.warning(uploaded_error)
+            st.info(
+                "Fix the CSV and upload again, or edit the manual inputs to continue with the dashboard."
+            )
 
     # ── input validation ───────────────────────────────────────────────────────
     input_errors: list[str] = []
@@ -426,7 +490,9 @@ if __name__ == "__main__":
             unsafe_allow_html=True,
         )
         for err in input_errors:
-            st.error(f"⚠ {err}")
+            st.error(
+                f"⚠ {err} Adjust the counts so conversions stay between 0 and visitors, then rerun the analysis."
+            )
         st.stop()
 
     # ── run analysis (cached) ──────────────────────────────────────────────────

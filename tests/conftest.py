@@ -105,7 +105,7 @@ def load_data_csv_factory(monkeypatch: pytest.MonkeyPatch) -> Callable[[pd.DataF
 	"""Route DataFrame inputs through the loader without touching disk."""
 
 	def _factory(frame: pd.DataFrame) -> ExperimentInput:
-		monkeypatch.setattr("ab_testing_framework.data_loader.pd.read_csv", lambda *_args, **_kwargs: frame)
-		return load_data("ignored.csv")
+		csv_text = frame.to_csv(index=False)
+		return load_data(StringIO(csv_text))
 
 	return _factory

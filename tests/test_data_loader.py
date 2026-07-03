@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from io import StringIO
+from io import BytesIO, StringIO
 
 import pandas as pd
 import pytest
@@ -37,6 +37,30 @@ def test_load_data_from_in_memory_aggregated_csv(csv_text_factory):
 
     assert experiment.visitors_a == 250
     assert experiment.conversions_b == 18
+
+
+def test_load_data_sniffs_semicolon_delimiter():
+    csv = StringIO(
+        "visitors_a;conversions_a;visitors_b;conversions_b\n"
+        "250;12;300;18\n"
+    )
+
+    experiment = load_data(csv)
+
+    assert experiment.visitors_b == 300
+    assert experiment.conversions_a == 12
+
+
+def test_load_data_decodes_utf8_bom_bytes():
+    csv = BytesIO(
+        "visitors_a,conversions_a,visitors_b,conversions_b\n"
+        "100,4,100,6\n".encode("utf-8-sig")
+    )
+
+    experiment = load_data(csv)
+
+    assert experiment.visitors_a == 100
+    assert experiment.conversions_b == 6
 
 
 @pytest.mark.parametrize(

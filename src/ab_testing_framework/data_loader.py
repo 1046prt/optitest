@@ -30,6 +30,9 @@ All non-numeric rows and completely empty rows are dropped silently.
 
 from __future__ import annotations
 
+import csv
+import logging
+from io import StringIO
 from pathlib import Path
 from typing import IO
 
@@ -37,12 +40,55 @@ import pandas as pd
 
 from .validation import ExperimentInput, validate_input
 
+logger = logging.getLogger(__name__)
+
 # ── aggregated-format columns ─────────────────────────────────────────────────
 _AGG_REQUIRED = {"visitors_a", "conversions_a", "visitors_b", "conversions_b"}
 _AGG_ORDER    = ["visitors_a", "conversions_a", "visitors_b", "conversions_b"]
 
 # ── per-user-format columns ───────────────────────────────────────────────────
 _USER_REQUIRED = {"variant", "converted"}
+
+
+def _decode_text(raw: bytes | str) -> tuple[str, str]:
+    if isinstance(raw, str):
+        return raw, "text"
+
+    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            return raw.decode(encoding), encoding
+        except UnicodeDecodeError:
+            continue
+
+    return raw.decode("utf-8", errors="replace"), "utf-8-replace"
+
+
+def _detect_delimiter(text: str) -> str:
+    sample = "\n".join(text.splitlines()[:5])
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+        return dialect.delimiter
+    except csv.Error:
+        candidates = [",", ";", "\t", "|"]
+        counts = {delimiter: sample.count(delimiter) for delimiter in candidates}
+        delimiter, count = max(counts.items(), key=lambda item: item[1])
+        return delimiter if count > 0 else ","
+
+
+def _read_csv_frame(file_path: str | Path | IO) -> tuple[pd.DataFrame, str, str]:
+    if isinstance(file_path, (str, Path)):
+        raw = Path(file_path).read_bytes()
+    else:
+        raw = file_path.read()
+
+    text, encoding = _decode_text(raw)
+    delimiter = _detect_delimiter(text)
+    frame = pd.read_csv(StringIO(text), sep=delimiter)
+    logger.info(
+        "csv_loaded",
+        extra={"encoding": encoding, "delimiter": delimiter, "row_count": len(frame)},
+    )
+    return frame, encoding, delimiter
 
 
 def _is_binary_column(series: pd.Series) -> bool:
@@ -156,7 +202,7 @@ def load_data(file_path: str | Path | IO) -> ExperimentInput:
         If required columns are missing, values are non-numeric, or
         per-row validation fails.
     """
-    frame = pd.read_csv(file_path)
+    frame, _encoding, _delimiter = _read_csv_frame(file_path)
 
     columns = set(frame.columns.str.strip().str.lower())
 
