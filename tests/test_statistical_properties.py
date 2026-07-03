@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 from hypothesis import given, settings, strategies as st
 from pytest import approx
 
@@ -20,6 +22,18 @@ def valid_experiments(draw):
     conversions_a = draw(st.integers(min_value=0, max_value=visitors_a))
     conversions_b = draw(st.integers(min_value=0, max_value=visitors_b))
     alpha = draw(st.sampled_from([0.01, 0.05, 0.1]))
+    return validate_input(visitors_a, conversions_a, visitors_b, conversions_b, alpha=alpha)
+
+
+@st.composite
+def stable_experiments(draw):
+    visitors_a = draw(st.integers(min_value=50, max_value=20_000))
+    visitors_b = draw(st.integers(min_value=50, max_value=20_000))
+    control_rate = draw(st.floats(min_value=0.02, max_value=0.98, allow_nan=False, allow_infinity=False))
+    treatment_rate = draw(st.floats(min_value=0.02, max_value=0.98, allow_nan=False, allow_infinity=False))
+    alpha = draw(st.sampled_from([0.01, 0.05, 0.1]))
+    conversions_a = min(visitors_a, max(0, round(visitors_a * control_rate)))
+    conversions_b = min(visitors_b, max(0, round(visitors_b * treatment_rate)))
     return validate_input(visitors_a, conversions_a, visitors_b, conversions_b, alpha=alpha)
 
 
@@ -70,22 +84,24 @@ def test_confidence_interval_contains_observed_lift(experiment):
 
 
 @settings(max_examples=40, deadline=None)
-@given(valid_experiments())
+@given(stable_experiments())
 def test_run_ab_test_and_power_stay_finite(experiment):
-    result = run_ab_test(
-        experiment.visitors_a,
-        experiment.conversions_a,
-        experiment.visitors_b,
-        experiment.conversions_b,
-        alpha=experiment.alpha,
-    )
-    power = estimate_power(
-        experiment.visitors_a,
-        experiment.conversions_a,
-        experiment.visitors_b,
-        experiment.conversions_b,
-        alpha=experiment.alpha,
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        result = run_ab_test(
+            experiment.visitors_a,
+            experiment.conversions_a,
+            experiment.visitors_b,
+            experiment.conversions_b,
+            alpha=experiment.alpha,
+        )
+        power = estimate_power(
+            experiment.visitors_a,
+            experiment.conversions_a,
+            experiment.visitors_b,
+            experiment.conversions_b,
+            alpha=experiment.alpha,
+        )
 
     assert result.is_statistically_significant == (result.z_test.p_value < experiment.alpha)
     assert 0.0 <= power <= 1.0

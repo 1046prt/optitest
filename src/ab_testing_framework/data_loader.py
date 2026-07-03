@@ -54,13 +54,13 @@ def _decode_text(raw: bytes | str) -> tuple[str, str]:
     if isinstance(raw, str):
         return raw, "text"
 
-    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+    for encoding in ("utf-8-sig", "utf-8"):
         try:
             return raw.decode(encoding), encoding
         except UnicodeDecodeError:
             continue
 
-    return raw.decode("utf-8", errors="replace"), "utf-8-replace"
+    return raw.decode("cp1252"), "cp1252"
 
 
 def _detect_delimiter(text: str) -> str:

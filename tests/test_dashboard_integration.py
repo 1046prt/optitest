@@ -128,10 +128,15 @@ def fake_streamlit():
     return FakeStreamlit()
 
 
-def test_dashboard_script_renders_with_default_inputs(monkeypatch, fake_streamlit):
+def _run_dashboard(monkeypatch, fake_streamlit):
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
-
+    sys.modules.pop("dashboard.app", None)
+    sys.modules.pop("dashboard", None)
     run_module("dashboard.app", run_name="__main__")
+
+
+def test_dashboard_script_renders_with_default_inputs(monkeypatch, fake_streamlit):
+    _run_dashboard(monkeypatch, fake_streamlit)
 
     assert fake_streamlit.config["page_title"] == "Split Testing Suite"
     assert any("A/B Test Results" in text for text in fake_streamlit.markdowns)
@@ -151,9 +156,7 @@ def test_dashboard_script_uses_uploaded_csv(monkeypatch):
         "B,1\n"
         "B,1\n"
     )
-    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
-
-    run_module("dashboard.app", run_name="__main__")
+    _run_dashboard(monkeypatch, fake_streamlit)
 
     assert any(metric["label"] == "Control rate" for metric in fake_streamlit.metrics)
     assert any("A/B Test Results" in text for text in fake_streamlit.markdowns)
@@ -162,14 +165,57 @@ def test_dashboard_script_uses_uploaded_csv(monkeypatch):
 def test_dashboard_recovers_from_invalid_csv(monkeypatch):
     fake_streamlit = FakeStreamlit()
     fake_streamlit.file_uploader = lambda *args, **kwargs: StringIO("foo,bar\n1,2\n")
-    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
 
-    run_module("dashboard.app", run_name="__main__")
+    _run_dashboard(monkeypatch, fake_streamlit)
 
     assert fake_streamlit.warnings
     assert fake_streamlit.infos
     assert len(fake_streamlit.charts) == 5
     assert any("uploaded CSV" in warning or "Could not use" in warning for warning in fake_streamlit.warnings)
+
+
+def test_dashboard_save_report_flow(monkeypatch, tmp_path):
+    fake_streamlit = FakeStreamlit()
+    fake_streamlit.button = lambda label: label == "Save to reports/"
+
+    saved_paths = {"markdown": tmp_path / "report.md", "json": tmp_path / "report.json"}
+    saved_paths["markdown"].write_text("# ok", encoding="utf-8")
+    saved_paths["json"].write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr("ab_testing_framework.report_generator.save_report", lambda *args, **kwargs: saved_paths)
+
+    _run_dashboard(monkeypatch, fake_streamlit)
+
+    assert any(event[0] == "success" for event in fake_streamlit.events)
+
+
+def test_dashboard_reports_input_errors(monkeypatch):
+    fake_streamlit = FakeStreamlit()
+    values = iter([10, 20, 10, 20])
+    fake_streamlit.number_input = lambda *args, **kwargs: next(values)
+
+    with pytest.raises(AssertionError):
+        _run_dashboard(monkeypatch, fake_streamlit)
+
+
+def test_dashboard_shows_underpowered_warning(monkeypatch):
+    fake_streamlit = FakeStreamlit()
+    values = iter([50, 1, 50, 1])
+    fake_streamlit.number_input = lambda *args, **kwargs: next(values)
+
+    _run_dashboard(monkeypatch, fake_streamlit)
+
+    assert any("Underpowered sample" in text for text in fake_streamlit.markdowns)
+
+
+def test_dashboard_renders_negative_significant_decision(monkeypatch):
+    fake_streamlit = FakeStreamlit()
+    values = iter([1000, 100, 1000, 50])
+    fake_streamlit.number_input = lambda *args, **kwargs: next(values)
+
+    _run_dashboard(monkeypatch, fake_streamlit)
+
+    assert any("Significant · Do not deploy" in text for text in fake_streamlit.markdowns)
 
 
 def test_dashboard_helpers_remain_importable():
@@ -178,3 +224,26 @@ def test_dashboard_helpers_remain_importable():
     assert "p &lt; 0.05" in _pval_badge(0.04)
     assert _rel_lift_display(None) == "N/A (zero baseline)"
     assert _lift_class(-0.01) == "negative"
+    assert _lift_class(0.0) == ""
+
+
+def test_dashboard_handles_validation_error(monkeypatch):
+    fake_streamlit = FakeStreamlit()
+    fake_streamlit.number_input = lambda *args, **kwargs: kwargs.get("value", 0)
+    monkeypatch.setattr("ab_testing_framework.analysis.run_ab_test", lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("bad input")))
+
+    with pytest.raises(AssertionError):
+        _run_dashboard(monkeypatch, fake_streamlit)
+
+    assert any("Validation error" in error for error in fake_streamlit.errors)
+
+
+def test_dashboard_handles_analysis_error(monkeypatch):
+    fake_streamlit = FakeStreamlit()
+    fake_streamlit.number_input = lambda *args, **kwargs: kwargs.get("value", 0)
+    monkeypatch.setattr("ab_testing_framework.analysis.run_ab_test", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    with pytest.raises(AssertionError):
+        _run_dashboard(monkeypatch, fake_streamlit)
+
+    assert any("Analysis failed" in error for error in fake_streamlit.errors)

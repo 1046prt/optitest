@@ -89,3 +89,21 @@ def test_estimate_power_returns_alpha_for_equal_rates():
 def test_estimate_sample_size_rejects_invalid_ratio():
     with pytest.raises(ValueError, match="ratio must be greater than zero"):
         estimate_sample_size(0.05, 0.06, ratio=0)
+
+
+def test_estimate_sample_size_rejects_invalid_expected_rate():
+    with pytest.raises(ValueError, match="expected_rate must be between 0 and 1"):
+        estimate_sample_size(0.05, 1.0)
+
+
+def test_estimate_power_zero_effect_branch(monkeypatch):
+    monkeypatch.setattr("ab_testing_framework.power_analysis.proportion_effectsize", lambda *args, **kwargs: 0.0)
+
+    assert estimate_power(100, 5, 100, 5) == pytest.approx(0.05)
+
+
+def test_estimate_sample_size_zero_effect_branch(monkeypatch):
+    monkeypatch.setattr("ab_testing_framework.power_analysis.proportion_effectsize", lambda *args, **kwargs: 0.0)
+
+    with pytest.raises(ValueError, match="no detectable effect"):
+        estimate_sample_size(0.1, 0.1)

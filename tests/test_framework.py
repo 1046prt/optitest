@@ -4,17 +4,18 @@ from __future__ import annotations
 
 import json
 import math
+from types import SimpleNamespace
 
 import pytest
 
-from ab_testing_framework.analysis import run_ab_test
+from ab_testing_framework.analysis import _build_recommendation, run_ab_test
 from ab_testing_framework.confidence_interval import calculate_ci
 from ab_testing_framework.data_loader import load_data
 from ab_testing_framework.effect_size import calculate_effect_size
 from ab_testing_framework.metrics import calculate_metrics
 from ab_testing_framework.power_analysis import analyze_power, estimate_power, estimate_sample_size
 from ab_testing_framework.report_generator import generate_markdown_report, generate_summary, save_report
-from ab_testing_framework.validation import validate_input
+from ab_testing_framework.validation import ExperimentInputModel, validate_input
 from ab_testing_framework.z_test import perform_z_test
 
 
@@ -78,6 +79,21 @@ def test_validate_input_accepts_whole_float_values():
     exp = validate_input(10.0, 1.0, 20.0, 2.0)
     assert exp.visitors_a == 10
     assert exp.conversions_b == 2
+
+
+def test_validate_input_rejects_non_numeric_alpha():
+    with pytest.raises(ValueError, match="Input should be a valid number"):
+        validate_input(10, 1, 10, 1, alpha="bad")
+
+
+def test_experiment_input_model_rejects_non_mapping():
+    with pytest.raises(TypeError, match="must be provided as a mapping"):
+        ExperimentInputModel.model_validate(None)
+
+
+def test_experiment_input_model_rejects_non_mapping():
+    with pytest.raises(TypeError, match="must be provided as a mapping"):
+        ExperimentInputModel.model_validate(None)
 
 
 # METRICS
@@ -246,6 +262,30 @@ def test_run_ab_test_summary_contains_alternative():
     assert "two-sided" in result.summary
 
 
+def test_build_recommendation_inconclusive_branch():
+    metrics = SimpleNamespace(relative_improvement=0.1)
+    z_test = SimpleNamespace(p_value=0.03)
+    confidence_interval = SimpleNamespace(lower_bound=-0.01, upper_bound=0.02, confidence_level=0.95)
+    experiment = SimpleNamespace(alpha=0.05)
+
+    recommendation = _build_recommendation(metrics, z_test, confidence_interval, experiment)
+
+    assert "inconclusive" in recommendation.lower()
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (0.0005, "p < 0.001"),
+        (0.005, "p < 0.01"),
+        (0.03, "p < 0.05"),
+        (0.2, "not significant"),
+    ],
+)
+def test_dashboard_pval_badge_thresholds(value, expected):
+    from dashboard.app import _pval_badge
+
+    assert expected.replace("<", "&lt;") in _pval_badge(value)
 # POWER ANALYSIS
 
 def test_power_analysis_reports_sample_size_and_power():

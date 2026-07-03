@@ -5,7 +5,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 import pytest
 
-from ab_testing_framework.data_loader import load_data
+from ab_testing_framework.data_loader import _decode_text, _detect_delimiter, load_data
 
 
 @pytest.mark.parametrize(
@@ -61,6 +61,17 @@ def test_load_data_decodes_utf8_bom_bytes():
 
     assert experiment.visitors_a == 100
     assert experiment.conversions_b == 6
+
+
+def test_decode_text_falls_back_to_cp1252():
+    decoded, encoding = _decode_text(b"caf\xe9")
+
+    assert decoded == "café"
+    assert encoding == "cp1252"
+
+
+def test_detect_delimiter_falls_back_to_comma():
+    assert _detect_delimiter("visitors_a conversions_a\n100 4\n") == ","
 
 
 @pytest.mark.parametrize(
@@ -126,6 +137,19 @@ def test_load_data_rejects_non_numeric_per_user_values(monkeypatch):
     monkeypatch.setattr("ab_testing_framework.data_loader.pd.read_csv", lambda *_args, **_kwargs: frame)
 
     with pytest.raises(ValueError, match="contains non-numeric values"):
+        load_data(StringIO("ignored"))
+
+
+def test_load_data_rejects_non_binary_per_user_values(monkeypatch):
+    frame = pd.DataFrame(
+        {
+            "variant": ["A", "B"],
+            "converted": [2, 0],
+        }
+    )
+    monkeypatch.setattr("ab_testing_framework.data_loader.pd.read_csv", lambda *_args, **_kwargs: frame)
+
+    with pytest.raises(ValueError, match="must contain only 0 or 1"):
         load_data(StringIO("ignored"))
 
 
