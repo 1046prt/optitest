@@ -13,11 +13,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ASSETS_DIR   = PROJECT_ROOT / "dashboard" / "assets"
 FAVICON_PATH = ASSETS_DIR / "favicon.svg"
 SRC_PATH     = PROJECT_ROOT / "src"
-if str(SRC_PATH) not in sys.path:
-    sys.path.insert(0, str(SRC_PATH))
+sys.path.insert(0, str(SRC_PATH))
 
 from ab_testing_framework.analysis import run_ab_test          # noqa: E402
-from ab_testing_framework.analysis import AbTestResult         # noqa: E402
 from ab_testing_framework.data_loader import load_data         # noqa: E402
 from ab_testing_framework.report_generator import (            # noqa: E402
     generate_markdown_report, save_report,

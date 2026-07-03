@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from io import StringIO
 from collections.abc import Callable
+from importlib import import_module
+from io import StringIO
 from runpy import run_module
 from types import ModuleType
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -225,6 +227,21 @@ def test_dashboard_helpers_remain_importable():
     assert _rel_lift_display(None) == "N/A (zero baseline)"
     assert _lift_class(-0.01) == "negative"
     assert _lift_class(0.0) == ""
+
+
+def test_dashboard_bootstrap_adds_src_path(monkeypatch):
+    fake_streamlit = FakeStreamlit()
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+
+    src_path = str(Path(r"d:\optitest\src"))
+    monkeypatch.setattr(sys, "path", [entry for entry in sys.path if entry != src_path])
+    sys.modules.pop("dashboard.app", None)
+    sys.modules.pop("dashboard", None)
+
+    module = import_module("dashboard.app")
+
+    assert any(entry.lower() == src_path.lower() for entry in sys.path)
+    assert module.APP_TITLE == "Split Testing Suite"
 
 
 def test_dashboard_handles_validation_error(monkeypatch):
