@@ -75,6 +75,10 @@ def _detect_delimiter(text: str) -> str:
         return delimiter if count > 0 else ","
 
 
+_AGG_INT_COLS = {col: "Int64" for col in _AGG_ORDER}
+_USER_INT_COLS = {"variant": str, "converted": "Int64"}
+
+
 def _read_csv_frame(file_path: str | Path | IO) -> tuple[pd.DataFrame, str, str]:
     if isinstance(file_path, (str, Path)):
         raw = Path(file_path).read_bytes()
@@ -83,7 +87,19 @@ def _read_csv_frame(file_path: str | Path | IO) -> tuple[pd.DataFrame, str, str]
 
     text, encoding = _decode_text(raw)
     delimiter = _detect_delimiter(text)
-    frame = pd.read_csv(StringIO(text), sep=delimiter)
+
+    header = text.splitlines()[0].strip()
+    normalized_cols = {
+        c.strip().lower() for c in header.split(delimiter)
+    }
+    if _AGG_REQUIRED.issubset(normalized_cols):
+        dtype_hint = dict(_AGG_INT_COLS)
+    elif _USER_REQUIRED.issubset(normalized_cols):
+        dtype_hint = dict(_USER_INT_COLS)
+    else:
+        dtype_hint = None
+
+    frame = pd.read_csv(StringIO(text), sep=delimiter, dtype=dtype_hint)
     logger.info(
         "csv_loaded",
         extra={"encoding": encoding, "delimiter": delimiter, "row_count": len(frame)},

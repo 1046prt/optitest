@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from io import BytesIO
 from pathlib import Path
 from datetime import datetime
 
@@ -314,6 +315,11 @@ def _run(va: int, ca: int, vb: int, cb: int, alpha: float, alternative: str) -> 
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
+@st.cache_data(show_spinner=False)
+def _generate_report(result: AbTestResult) -> str:
+    return generate_markdown_report(result)
+
+
 def _pval_badge(p: float) -> str:
     if p < 0.001:
         return '<span class="pval-badge strong">p &lt; 0.001 ✦✦✦</span>'
@@ -345,11 +351,12 @@ def _uploaded_csv_help() -> str:
     )
 
 
-def _load_uploaded_experiment(uploaded_file: object) -> tuple[ExperimentInput | None, str | None]:
+@st.cache_data(show_spinner=False)
+def _load_uploaded_experiment(file_bytes: bytes, file_name: str) -> tuple[ExperimentInput | None, str | None]:
     try:
-        return load_data(uploaded_file), None
+        return load_data(BytesIO(file_bytes)), None
     except Exception as exc:
-        source_name = getattr(uploaded_file, "name", "uploaded file")
+        source_name = file_name
         logger.exception(
             "dashboard_csv_load_failed",
             extra={"source": source_name},
@@ -459,7 +466,13 @@ if __name__ == "__main__":
     # ── load CSV if uploaded ───────────────────────────────────────────────────
     uploaded_error = None
     if uploaded_file is not None:
-        experiment_data, uploaded_error = _load_uploaded_experiment(uploaded_file)
+        raw_content = uploaded_file.read()
+        if isinstance(raw_content, str):
+            file_bytes = raw_content.encode("utf-8")
+        else:
+            file_bytes = raw_content
+        file_name = getattr(uploaded_file, "name", "uploaded.csv")
+        experiment_data, uploaded_error = _load_uploaded_experiment(file_bytes, file_name)
         if experiment_data is not None:
             visitors_a    = experiment_data.visitors_a
             conversions_a = experiment_data.conversions_a
@@ -670,7 +683,7 @@ if __name__ == "__main__":
     st.markdown("<div class='section-label'>Export</div>", unsafe_allow_html=True)
 
     report_stem    = f"ab_test_report_{datetime.now():%Y%m%d_%H%M%S}"
-    report_markdown = generate_markdown_report(result)
+    report_markdown = _generate_report(result)
 
     with st.expander("Markdown report"):
         st.code(report_markdown, language="markdown")

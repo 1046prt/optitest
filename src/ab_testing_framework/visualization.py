@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots  # noqa: F401  (reserved for future multi-panel charts)
@@ -60,6 +61,7 @@ def _dark_layout(**overrides) -> dict:
 
 # ── individual charts ─────────────────────────────────────────────────────────
 
+@st.cache_data(show_spinner=False)
 def bar_chart(result: AbTestResult) -> go.Figure:
     """Side-by-side conversion rate bars with value labels."""
     m = result.metrics
@@ -90,6 +92,7 @@ def bar_chart(result: AbTestResult) -> go.Figure:
     return fig
 
 
+@st.cache_data(show_spinner=False)
 def confidence_plot(result: AbTestResult) -> go.Figure:
     """Horizontal CI bar with observed lift dot and zero reference."""
     ci = result.confidence_interval
@@ -136,6 +139,7 @@ def confidence_plot(result: AbTestResult) -> go.Figure:
     return fig
 
 
+@st.cache_data(show_spinner=False)
 def z_score_plot(result: AbTestResult) -> go.Figure:
     """
     Standard normal curve with:
@@ -214,6 +218,7 @@ def z_score_plot(result: AbTestResult) -> go.Figure:
     return fig
 
 
+@st.cache_data(show_spinner=False)
 def distribution_plot(result: AbTestResult, points: int = 300) -> go.Figure:
     m  = result.metrics
     ex = result.experiment
@@ -262,6 +267,7 @@ def distribution_plot(result: AbTestResult, points: int = 300) -> go.Figure:
     return fig
 
 
+@st.cache_data(show_spinner=False)
 def histogram(result: AbTestResult, sample_size: int = 1000, seed: int = 42) -> go.Figure:
     rng = np.random.default_rng(seed)
     m   = result.metrics
