@@ -12,8 +12,10 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = PROJECT_ROOT / "src"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 if str(SRC_PATH) not in sys.path:
-	sys.path.insert(0, str(SRC_PATH))
+    sys.path.insert(0, str(SRC_PATH))
 
 from ab_testing_framework.analysis import AbTestResult
 from ab_testing_framework.data_loader import load_data

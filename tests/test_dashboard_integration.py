@@ -132,9 +132,10 @@ def fake_streamlit():
 
 def _run_dashboard(monkeypatch, fake_streamlit):
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
-    sys.modules.pop("dashboard.app", None)
-    sys.modules.pop("dashboard", None)
-    run_module("dashboard.app", run_name="__main__")
+    for mod in list(sys.modules):
+        if mod == "dashboard" or mod.startswith("dashboard."):
+            del sys.modules[mod]
+    run_module("dashboard.pages.analysis", run_name="__main__")
 
 
 def test_dashboard_script_renders_with_default_inputs(monkeypatch, fake_streamlit):
