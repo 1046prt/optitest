@@ -1,3 +1,6 @@
+# ── Generated version file ─────────────────────────────────────────────────────
+src/ab_testing_framework/_version.py
+
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]

@@ -85,30 +85,6 @@ print(result.power_analysis.power)  # 0.xx
 
 ---
 
-## Project layout
-
-```
-src/ab_testing_framework/   statistical engine
-  analysis.py               orchestrator — run_ab_test()
-  z_test.py                 two-proportion z-test
-  confidence_interval.py    Wald CI for lift
-  effect_size.py            Cohen's h, relative lift
-  power_analysis.py         observed power + sample size planning
-  metrics.py                conversion rate calculations
-  validation.py             input validation
-  data_loader.py            CSV parsing (aggregated + per-user)
-  report_generator.py       Markdown and JSON export
-  visualization.py          Plotly charts (dark theme)
-
-dashboard/app.py            Streamlit front-end
-tests/test_framework.py     49 pytest tests
-notebooks/                  EDA → Z-test → CI → Effect size
-data/                       sample CSVs
-reports/                    generated reports (git-ignored)
-```
-
----
-
 ## Requirements
 
 Python 3.10+ · numpy · pandas · scipy · statsmodels · plotly · streamlit

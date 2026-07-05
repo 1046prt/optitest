@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=68", "wheel", "setuptools_scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ab-testing-framework"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A statistically sound A/B testing framework with analysis and dashboard support"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -67,6 +67,9 @@ target-version = ["py310", "py311", "py312"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --cov --cov-report=term-missing --cov-fail-under=80"
+
+[tool.setuptools_scm]
+write_to = "src/ab_testing_framework/_version.py"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
