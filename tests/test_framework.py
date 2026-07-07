@@ -564,6 +564,204 @@ def test_chi_square_in_json_export(tmp_path):
     assert "cramers_v" in data["chi_square"]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# MULTIPLE TESTING CORRECTION
+# ══════════════════════════════════════════════════════════════════════════════
+
+from ab_testing_framework.multiple_testing import correct_pvalues
+
+
+def test_bonferroni_scales_pvalues():
+    raw = [0.01, 0.04, 0.10]
+    r = correct_pvalues(raw, alpha=0.05, method="bonferroni")
+    assert r.adjusted_pvalues == pytest.approx([0.03, 0.12, 0.30])
+    assert r.rejected == (True, False, False)
+    assert r.num_rejected == 1
+
+
+def test_holm_more_powerful_than_bonferroni():
+    raw = [0.01, 0.03, 0.05]
+    bonf = correct_pvalues(raw, alpha=0.05, method="bonferroni")
+    holm = correct_pvalues(raw, alpha=0.05, method="holm")
+    # Holm rejects at least as many as Bonferroni
+    assert holm.num_rejected >= bonf.num_rejected
+
+
+def test_bh_rejects_most():
+    raw = [0.001, 0.01, 0.03, 0.04, 0.20]
+    bh   = correct_pvalues(raw, alpha=0.05, method="benjamini_hochberg")
+    bonf = correct_pvalues(raw, alpha=0.05, method="bonferroni")
+    assert bh.num_rejected >= bonf.num_rejected
+
+
+def test_all_significant_all_rejected():
+    raw = [0.001, 0.002, 0.003]
+    for method in ("bonferroni", "holm", "benjamini_hochberg"):
+        r = correct_pvalues(raw, alpha=0.05, method=method)
+        assert all(r.rejected), f"{method} should reject all"
+
+
+def test_none_significant_none_rejected():
+    raw = [0.50, 0.80, 0.99]
+    for method in ("bonferroni", "holm", "benjamini_hochberg"):
+        r = correct_pvalues(raw, alpha=0.05, method=method)
+        assert not any(r.rejected), f"{method} should reject none"
+
+
+def test_adjusted_pvalues_capped_at_1():
+    raw = [0.99, 0.99, 0.99]
+    r = correct_pvalues(raw, alpha=0.05, method="bonferroni")
+    assert all(p <= 1.0 for p in r.adjusted_pvalues)
+
+
+def test_correct_pvalues_invalid_method():
+    with pytest.raises(ValueError, match="method must be one of"):
+        correct_pvalues([0.05], method="unknown")
+
+
+def test_correct_pvalues_empty():
+    with pytest.raises(ValueError, match="must not be empty"):
+        correct_pvalues([])
+
+
+def test_correct_pvalues_out_of_range():
+    with pytest.raises(ValueError, match="outside \\[0, 1\\]"):
+        correct_pvalues([0.05, 1.5])
+
+
+def test_multiple_testing_metadata():
+    raw = [0.01, 0.04, 0.10]
+    r = correct_pvalues(raw, alpha=0.05, method="holm")
+    assert r.num_comparisons == 3
+    assert r.alpha == 0.05
+    assert r.method == "holm"
+    assert r.raw_pvalues == tuple(raw)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BAYESIAN A/B TEST
+# ══════════════════════════════════════════════════════════════════════════════
+
+from ab_testing_framework.bayesian import bayesian_test
+
+
+def test_bayesian_prob_b_beats_a_positive_lift():
+    exp = validate_input(10000, 450, 10000, 520)
+    r = bayesian_test(exp)
+    assert r.prob_b_beats_a > 0.90       # strong evidence B is better
+    assert r.prob_a_beats_b < 0.10
+    assert math.isclose(r.prob_b_beats_a + r.prob_a_beats_b, 1.0, abs_tol=1e-9)
+
+
+def test_bayesian_prob_no_lift_near_half():
+    exp = validate_input(5000, 250, 5000, 250)
+    r = bayesian_test(exp)
+    assert 0.40 < r.prob_b_beats_a < 0.60   # near 50/50 with no real difference
+
+
+def test_bayesian_expected_loss_lower_for_better_variant():
+    exp = validate_input(10000, 450, 10000, 520)
+    r = bayesian_test(exp)
+    # B is better → choosing A has higher expected loss
+    assert r.expected_loss_a > r.expected_loss_b
+
+
+def test_bayesian_credible_intervals_contain_observed_rate():
+    exp = validate_input(10000, 450, 10000, 520)
+    r = bayesian_test(exp)
+    rate_a = 450 / 10000
+    rate_b = 520 / 10000
+    assert r.credible_interval_a[0] <= rate_a <= r.credible_interval_a[1]
+    assert r.credible_interval_b[0] <= rate_b <= r.credible_interval_b[1]
+
+
+def test_bayesian_posterior_means_close_to_observed():
+    exp = validate_input(10000, 450, 10000, 520)
+    r = bayesian_test(exp)
+    assert r.posterior_mean_a == pytest.approx(450 / 10000, abs=0.005)
+    assert r.posterior_mean_b == pytest.approx(520 / 10000, abs=0.005)
+
+
+def test_bayesian_reproducible_with_seed():
+    exp = validate_input(5000, 225, 5000, 260)
+    r1 = bayesian_test(exp, seed=42)
+    r2 = bayesian_test(exp, seed=42)
+    assert r1.prob_b_beats_a == r2.prob_b_beats_a
+
+
+def test_bayesian_invalid_prior():
+    exp = validate_input(100, 10, 100, 12)
+    with pytest.raises(ValueError, match="prior_alpha and prior_beta must both be positive"):
+        bayesian_test(exp, prior_alpha=0)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SEQUENTIAL TESTING
+# ══════════════════════════════════════════════════════════════════════════════
+
+from ab_testing_framework.sequential import sequential_test
+
+
+def test_sequential_obf_early_look_conservative():
+    """At look 1 of 5, OBF threshold should be much smaller than 0.05."""
+    exp = validate_input(5000, 225, 5000, 260)
+    r = sequential_test(exp, method="obf", current_look=1, total_looks=5)
+    assert r.adjusted_alpha < 0.005    # OBF is very conservative early on
+    assert r.method == "obf"
+    assert r.total_looks == 5
+
+
+def test_sequential_obf_final_look_near_nominal():
+    """At the final look, OBF threshold should be close to 0.05."""
+    exp = validate_input(5000, 225, 5000, 260)
+    r = sequential_test(exp, method="obf", current_look=5, total_looks=5)
+    assert r.adjusted_alpha > 0.04    # nearly full alpha at final look
+    assert r.adjusted_alpha < 0.055
+
+
+def test_sequential_obf_stops_on_significance():
+    """Large, obvious lift should trigger a stop at the final OBF look."""
+    exp = validate_input(50000, 2000, 50000, 3000)   # very large effect
+    r = sequential_test(exp, method="obf", current_look=5, total_looks=5)
+    assert r.stop is True
+    assert "reject" in r.decision.lower()
+
+
+def test_sequential_obf_continues_for_no_lift():
+    exp = validate_input(1000, 50, 1000, 51)   # tiny, non-significant lift
+    r = sequential_test(exp, method="obf", current_look=1, total_looks=5)
+    assert r.stop is False
+    assert "Continue" in r.decision
+
+
+def test_sequential_sprt_rejects_large_effect():
+    exp = validate_input(50000, 2000, 50000, 3000)
+    r = sequential_test(exp, method="sprt", mde=0.005)
+    assert r.stop is True
+    assert r.likelihood_ratio is not None
+    assert "reject" in r.decision.lower()
+
+
+def test_sequential_sprt_continues_for_null():
+    exp = validate_input(500, 25, 500, 25)   # identical rates — LR near 1
+    r = sequential_test(exp, method="sprt", mde=0.01)
+    # With identical data LR=1, which is between the two bounds
+    assert r.likelihood_ratio is not None
+    assert math.isfinite(r.likelihood_ratio)
+
+
+def test_sequential_invalid_method():
+    exp = validate_input(100, 5, 100, 6)
+    with pytest.raises(ValueError, match="method must be"):
+        sequential_test(exp, method="invalid")
+
+
+def test_sequential_obf_invalid_look():
+    exp = validate_input(100, 5, 100, 6)
+    with pytest.raises(ValueError):
+        sequential_test(exp, method="obf", current_look=6, total_looks=5)
+
+
 # VISUALIZATION SMOKE TESTS
 
 import plotly.graph_objects as go

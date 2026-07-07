@@ -44,6 +44,29 @@ def run_analysis() -> None:
     # ── bootstrap session state ────────────────────────────────────────────────
     init_state()
 
+    # ── read URL query params → pre-fill inputs (shareable links) ─────────────
+    qp = st.query_params
+    def _qint(key: str, default: int) -> int:
+        try:
+            return int(qp[key])
+        except (KeyError, ValueError, TypeError):
+            return default
+    def _qfloat(key: str, default: float) -> float:
+        try:
+            return float(qp[key])
+        except (KeyError, ValueError, TypeError):
+            return default
+    def _qstr(key: str, default: str, choices: list[str]) -> str:
+        v = qp.get(key, default)
+        return v if v in choices else default
+
+    url_va  = _qint("va",  st.session_state["last_visitors_a"])
+    url_ca  = _qint("ca",  st.session_state["last_conversions_a"])
+    url_vb  = _qint("vb",  st.session_state["last_visitors_b"])
+    url_cb  = _qint("cb",  st.session_state["last_conversions_b"])
+    url_alpha = _qfloat("alpha", st.session_state["last_alpha"])
+    url_alt   = _qstr("alt", st.session_state["last_alternative"], ALTERNATIVE_OPTIONS)
+
     # ── sidebar ────────────────────────────────────────────────────────────────
     with st.sidebar:
         st.markdown(f"### {SIDEBAR_LABELS['title']}")
@@ -63,7 +86,7 @@ def run_analysis() -> None:
         visitors_a = st.number_input(
             "Visitors",
             min_value=1,
-            value=st.session_state["last_visitors_a"],
+            value=url_va,
             step=100,
             key="va",
             help=INPUT_HELP["visitors_a"],
@@ -71,7 +94,7 @@ def run_analysis() -> None:
         conversions_a = st.number_input(
             "Conversions",
             min_value=0,
-            value=st.session_state["last_conversions_a"],
+            value=url_ca,
             step=1,
             key="ca",
             help=INPUT_HELP["conversions_a"],
@@ -81,7 +104,7 @@ def run_analysis() -> None:
         visitors_b = st.number_input(
             "Visitors",
             min_value=1,
-            value=st.session_state["last_visitors_b"],
+            value=url_vb,
             step=100,
             key="vb",
             help=INPUT_HELP["visitors_b"],
@@ -89,7 +112,7 @@ def run_analysis() -> None:
         conversions_b = st.number_input(
             "Conversions",
             min_value=0,
-            value=st.session_state["last_conversions_b"],
+            value=url_cb,
             step=1,
             key="cb",
             help=INPUT_HELP["conversions_b"],
@@ -100,14 +123,14 @@ def run_analysis() -> None:
             "Significance level (α)",
             min_value=ALPHA_MIN,
             max_value=ALPHA_MAX,
-            value=st.session_state["last_alpha"],
+            value=max(ALPHA_MIN, min(ALPHA_MAX, url_alpha)),
             step=ALPHA_STEP,
             help=INPUT_HELP["alpha"],
         )
         alternative = st.selectbox(
             "Hypothesis",
             options=ALTERNATIVE_OPTIONS,
-            index=ALTERNATIVE_OPTIONS.index(st.session_state["last_alternative"]),
+            index=ALTERNATIVE_OPTIONS.index(url_alt),
             help=INPUT_HELP["alternative"],
         )
 
@@ -187,6 +210,16 @@ def run_analysis() -> None:
     # ── persist inputs + push to history ──────────────────────────────────────
     save_inputs(int(visitors_a), int(conversions_a), int(visitors_b), int(conversions_b), float(alpha), alternative)
     push_history(int(visitors_a), int(conversions_a), int(visitors_b), int(conversions_b), float(alpha), alternative, result)
+
+    # ── update URL query params for shareability ───────────────────────────────
+    st.query_params.update({
+        "va":    str(int(visitors_a)),
+        "ca":    str(int(conversions_a)),
+        "vb":    str(int(visitors_b)),
+        "cb":    str(int(conversions_b)),
+        "alpha": str(float(alpha)),
+        "alt":   alternative,
+    })
 
     # ── SRM warning ───────────────────────────────────────────────────────────
     srm = result.srm
